@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 Chris Farrell -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fm-static: FM-1 firmware flasher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=VT323&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d1a21'/%3E%3Cpath d='M2 16c3-12 5-12 7 0s4 12 7 0 5-12 7 0 3 12 7 0' fill='none' stroke='%234fe8d0' stroke-width='2.4'/%3E%3C/svg%3E">
+</head>
+<body>
+<main>
+  <header>
+    <div class="mark"><h1>fm-static</h1><p class="tag">Update an FM-1 the other updaters can't find.</p></div>
+    <div class="crt"><canvas id="scope" aria-hidden="true"></canvas><div id="lcd" role="status">waiting</div></div>
+  </header>
+
+  <p class="about">For an M-VAVE FM-1 whose MIDI port has another name on your computer, whether you
+    renamed it or something else did. On a Mac, Audio MIDI Setup can keep the name of a different device
+    last plugged into the same USB socket. Updaters that look for the FM-1 by name then can't find it.
+    This page lists every port and lets you pick yours. If your firmware's own updater works, use that.</p>
+
+  <section class="stage" id="st-file" data-state="now">
+    <h2>Firmware</h2>
+    <p class="lead dim">Any <code>.fwsc</code> file. It is read in your browser and goes nowhere else. Flashing is at your own risk: if the FM-1 stays in update mode, replug it and press <b>Finish update</b>.</p>
+    <div id="drop">
+      <p>Drop a <code>.fwsc</code> file here, or</p>
+      <input id="file" type="file" accept=".fwsc">
+    </div>
+    <div id="fileinfo" hidden>
+      <dl>
+        <dt>File</dt><dd id="f-name"></dd>
+        <dt>Identity</dt><dd id="f-id"></dd>
+        <dt>Size</dt><dd id="f-size"></dd>
+        <dt>SHA-256</dt><dd id="f-sha"></dd>
+        <dt>Origin</dt><dd id="f-kind"></dd>
+      </dl>
+      <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from someone I trust and accept the risk of installing it.</label></p>
+    </div>
+  </section>
+
+  <section class="stage" id="st-dev">
+    <h2>Your FM-1</h2>
+    <p id="connect-row"><button id="connect">Connect</button></p>
+    <div id="devices" hidden>
+      <div id="device-list"></div>
+      <p id="none" class="dim" hidden>Nothing answered under a known port name. Pick your FM-1 in the port list below.</p>
+
+      <h3>MIDI ports</h3>
+      <p class="small">Every port your computer sees. Only a port you press <b>Try</b> on is sent anything. On a Mac a port can keep the name of another device last plugged into that USB socket; rename it in Audio MIDI Setup (Window, Show MIDI Studio).</p>
+      <ul id="ports" class="plain"></ul>
+      <p id="ports-empty" class="small dim" hidden>No other ports. If your FM-1 is missing, check the USB cable: it must carry data.</p>
+
+      <details>
+        <summary>Port names the page looks for</summary>
+        <p class="small">A port with one of these in its name is found automatically. Add the name your FM-1 shows up under; it is kept in this browser.</p>
+        <ul id="presets" class="chips" aria-label="Built-in names"></ul>
+        <ul id="custom" class="chips" aria-label="Your names"></ul>
+        <form id="add-name"><input id="new-name" placeholder="e.g. the name your FM-1 shows up under" aria-label="New port name"><button class="small" type="submit">Add name</button></form>
+      </details>
+      <p style="margin-top:14px"><button id="rescan" class="small">Rescan</button></p>
+    </div>
+  </section>
+
+  <section class="stage" id="st-go">
+    <h2>Install</h2>
+    <p><button id="go" disabled>Install</button> <span id="why" class="small"></span></p>
+    <div id="bar" aria-hidden="true"></div>
+    <p id="status" role="status"></p>
+    <details><summary>Log</summary><pre id="log"></pre></details>
+  </section>
+
+  <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE.</footer>
+</main>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

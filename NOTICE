@@ -1,0 +1,20 @@
+fm-static
+Copyright (C) 2026 Chris Farrell
+
+fm-static is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License, version 3 only, as published by the Free Software Foundation.
+It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See LICENSE for the full text.
+
+Lineage
+-------
+src/fm1ota.js and src/fm1pkg.js are modified copies of web/fm1ota.js and web/fm1pkg.js from
+Felucca (https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic),
+Hügelton Instruments, licensed GPL-3.0-only. The original copyright lines are kept in each file,
+and each file states what was changed and when. The rest of fm-static is new code under the same
+licence.
+
+No firmware is included. A .fwsc file chosen on the page is read in the browser and sent only to
+the FM-1 over USB.
+
+M-VAVE and FM-1 are names of their owners; fm-static is not affiliated with M-VAVE or with Felucca.
