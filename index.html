@@ -74,16 +74,25 @@
         <button id="boot-check" class="small" hidden>Nothing shows up: is it in boot mode?</button></p>
       <div id="boot-msg" hidden></div>
       <ol id="route-dev" class="route"></ol>
-      <div id="wipe-row" class="wipe" hidden>
-        <label><input id="wipe" type="checkbox"> Erase flash up to 0xBA000 while installing (full wipe)</label>
-        <p id="wipe-info" class="small"></p>
-        <p id="wipe-pick" class="small" hidden><button id="stock-open" class="small" type="button">Choose the official V15 package</button></p>
-      </div>
+      <ol id="route-opts" class="route">
+        <li id="wipe-row" class="cp" data-state="option" hidden>
+          <span class="plate"><span>OPTION</span></span>
+          <div>
+            <b>Full wipe</b>
+            <p><label><input id="wipe" type="checkbox"> Erase flash up to 0xBA000 while installing</label></p>
+            <p id="wipe-info" class="small"></p>
+            <p id="wipe-pick" class="small" hidden><button id="stock-open" class="small" type="button">Choose the official V15 package</button></p>
+          </div>
+        </li>
+      </ol>
       <p id="install-row" class="next" hidden><button id="go">Install</button> <span id="why" class="small"></span></p>
 
       <div id="after" hidden>
         <ol id="route-events" class="route"></ol>
-        <div id="restore" class="restore" hidden>
+        <ol id="route-restore" class="route">
+          <li id="restore" class="cp" data-state="barrier" hidden>
+            <span class="plate"><span>RESTORE</span></span>
+            <div>
           <h3>Restore official startup code</h3>
           <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
             startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
@@ -116,6 +125,8 @@
           <p class="trust"><label><input id="risk" type="checkbox"> I understand this can leave my FM-1 needing a boot-mode rescue<span id="risk-more"></span>.</label></p>
           <p><button id="restore-go" disabled>Restore startup code and install</button></p>
         </div>
+          </li>
+        </ol>
       </div>
       <p id="status" role="status"></p>
       <details id="logbox" hidden><summary>Log</summary><pre id="log"></pre></details>
@@ -147,8 +158,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.15</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.17</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.15"></script>
+<script type="module" src="src/app.js?v=2026-10-25.17"></script>
 </body>
 </html>

@@ -131,7 +131,6 @@ summary { cursor: pointer; font: 600 1rem var(--head); }
 #status { min-height: 1.6em; margin-top: 8px; max-width: 54ch; font-weight: 500; }
 .ok { color: var(--go); } .err { color: var(--stop); }
 
-.restore { margin-top: 24px; padding-top: 6px; border-top: 1px solid var(--line); }
 .risk { border: 2px solid var(--stop); padding: 14px 16px 6px; margin: 14px 0; }
 .risk h4 { color: var(--stop); }
 .risk ul { padding-left: 18px; margin: 0 0 12px; }
@@ -174,3 +173,14 @@ dialog h3 { margin-top: 0; }
 .bar::after { content: ""; position: absolute; inset: 6px 0 auto; height: 2px; background: repeating-linear-gradient(90deg, #eef0ee 0 14px, transparent 14px 28px); opacity: .55; }
 .bar i { position: absolute; inset: 0 auto 0 0; background: var(--orange); transition: width .25s cubic-bezier(.2, .8, .2, 1); z-index: 1; }
 .bar i::after { content: ""; position: absolute; inset: 6px 0 auto; height: 2px; background: repeating-linear-gradient(90deg, var(--on-orange) 0 14px, transparent 14px 28px); }
+
+/* options and the restore step are steps of the chain, like the checkpoints */
+.cp[data-state="option"] .plate { color: var(--dim); }
+.cp[data-state="option"]::before { background: var(--dim); }
+.cp label { cursor: pointer; }
+.route + .route { margin-top: 0; }
+.cp h3 { margin: 0 0 6px; }
+
+#restore p, #restore li, #wipe-row p { max-width: 60ch; }
+
+.risk b { display: inline; }
