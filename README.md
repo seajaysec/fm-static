@@ -21,6 +21,10 @@ If your firmware's own updater, or M-VAVE's, works for you, use that instead.
 - Can find the file for you: paste the address of a page that offers firmware, and the browser reads that page itself,
   lists the `.fwsc` files in its source (or loads the one it finds). It works only for sites that allow other pages to
   read them; for the rest it says so and you download the file and drop it in.
+- Optional **full wipe**: writes the chosen firmware with M-VAVE's update loader over a package covering flash up to 0xBA000,
+  so every sector in that range is erased first (saved projects and settings kept there are lost). The package is built
+  from the official V15 package's loader and startup code plus the chosen firmware's app area, the way a Baudgirl
+  release is V15 with another flash.bin; the builder reproduces all ten Baudgirl packages inspected byte for byte.
 - Lists every MIDI port. Ports with a usual FM-1 name are asked who they are; any other port is sent
   nothing until you press **Try this port** on it.
 - Lets you keep your own port names, so the page finds your FM-1 by itself next time (stored in

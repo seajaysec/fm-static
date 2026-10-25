@@ -5,6 +5,8 @@
 // From Felucca's web/fm1pkg.js (https://github.com/hugelton/Felucca).
 // Modified 2026-10-06 by Chris Farrell for fm-static: reduced to reading a package
 // (identity, CRC check, origin hint, logical image); the package building code is removed.
+// Added 2026-10-25 (Chris Farrell, own code, from reading packages): rebuild(), a package with the same parts as a template
+// package and another flash.bin.
 // Modified 2026-10-24: the package's update parts (which loader, flash.bin's size and place, its startup code, whether
 // that is official V15's).
 //
@@ -139,4 +141,58 @@ export async function inspect(bytes) {
   const kind = sha256 === STOCK_V15_SHA256 ? "stock" : hasMark(raw) ? "felucca" : "other";
   const image = logicalImage(raw);
   return { product, model: m[1], size: raw.length, sha256, kind, ...(await parts(image)), image };
+}
+
+// ---------------------------------------------------------------- rebuild ---
+// A package is a UFW header (entry list) followed by flash.bin and the other parts. A Baudgirl release is the official
+// V15 package with a different, larger flash.bin: the head, the other parts and the header fields are V15's, only
+// flash.bin's length and CRC, the offsets of the parts after it, the total length and the header CRCs differ. rebuild()
+// makes that package from a template (the official V15 package's logical image, inspect().image) and a flash.bin.
+// product: the identity string for the 20 marker bytes ("FM-1_102"). Returns the raw .fwsc bytes.
+export function rebuild(lg, flashBin, product) {
+  const h = lg.slice(0, 0x400);
+  enc(h, 0, 0x40);
+  const n = u16(h, 8);
+  const ents = [];
+  for (let i = 0; i < n; i++) { const e = h.slice(0x40 + i * 0x50, 0x90 + i * 0x50); enc(e, 0, 0x50); ents.push(e); }
+  const f = ents.find((e) => u16(e, 0) === 0);
+  if (!f) throw new Error("the template has no flash.bin");
+  const oldLen = u32(f, 12), oldEnd = u32(f, 8) + oldLen, delta = flashBin.length - oldLen;
+  const put32 = (b, o, v) => { b[o] = v & 255; b[o + 1] = (v >>> 8) & 255; b[o + 2] = (v >>> 16) & 255; b[o + 3] = (v >>> 24) & 255; };
+  const put16 = (b, o, v) => { b[o] = v & 255; b[o + 1] = (v >>> 8) & 255; };
+  for (const e of ents) {
+    if (e === f) { put32(e, 12, flashBin.length); put32(e, 16, flashBin.length); put16(e, 4, crc16(flashBin)); }   // length and its aligned copy
+    else if (u32(e, 8) >= oldEnd) put32(e, 8, u32(e, 8) + delta);
+  }
+  put32(h, 4, lg.length + delta);
+  const region = new Uint8Array(n * 0x50);
+  ents.forEach((e, i) => { const x = e.slice(); enc(x, 0, 0x50); region.set(x, i * 0x50); });
+  h.set(region, 0x40);
+  put16(h, 2, crc16(region));
+  put16(h, 0, crc16(h.subarray(2, 0x40)));
+  enc(h, 0, 0x40);
+  const out = new Uint8Array(lg.length + delta);
+  out.set(h, 0);
+  out.set(flashBin, u32(f, 8));
+  out.set(lg.subarray(oldEnd), oldEnd + delta);
+  const raw = new Uint8Array(out.length + BLOCKS);
+  for (let i = 0; i < BLOCKS; i++) {
+    raw.set(out.subarray(i * KEEP, i * KEEP + KEEP), i * BLK);
+    raw[i * BLK + KEEP] = i < product.length ? (product.charCodeAt(i) + i + 1) & 0xFF : 0x7D;
+  }
+  raw.set(out.subarray(BLOCKS * KEEP), BLOCKS * BLK);
+  return raw;
+}
+
+// "Full wipe": flash.bin as the official update loader writes it when the package covers the whole range up to WIPE_END
+// (the largest a package inspected goes to). The head is the template's (V15's), the app area is the target's, the rest is
+// erased flash (0xFF), so the loader erases and writes every sector through WIPE_END.
+export const WIPE_END = 0xBA000;
+export function wipeFlash(stock, pkg) {
+  if (stock.loader !== "official" || stock.flashOff !== pkg.flashOff) throw new Error("the template is not an official-loader package of this layout");
+  if (pkg.flashLen > WIPE_END || pkg.flashLen < 0x4000) throw new Error("this package's flash.bin does not fit the wipe range");
+  const fb = new Uint8Array(WIPE_END).fill(0xFF);
+  fb.set(stock.image.subarray(stock.flashOff, stock.flashOff + 0x4000), 0);
+  fb.set(pkg.image.subarray(pkg.flashOff + 0x4000, pkg.flashOff + pkg.flashLen), 0x4000);
+  return fb;
 }

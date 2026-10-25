@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.9";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.9";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.9";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.11";
+import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.11";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.11";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.9";
+const VERSION = "2026-10-25.11";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -19,6 +19,7 @@ const state = {
   events: [],                  // what happened during the install, shown on the route
   refusedStartup: false,       // the running firmware stopped at its startup-code check (see stepOneRefusal)
   donor: null,                 // a Felucca-family package whose startup code answers that check
+  stock: null,                 // the official V15 package (inspected): its loader and startup code build a wipe package
   known: new Map(),            // Felucca-family packages loaded on this page, by identity: reused as that package
 };
 
@@ -107,6 +108,7 @@ function devChecks(dev, pkg) {
 // what happens during an install, in order, as it happens
 function note(st, plate, title, text) { state.events.push({ state: st, plate, title, text }); $("after").hidden = false; renderRoute(); }
 
+const wipeOn = () => $("wipe").checked;
 const items = (list) => list.map((c) => {
   const li = make("li", { className: "cp" }, make("span", { className: "plate" }, make("span", { textContent: c.plate })),
     make("div", {}, make("b", { textContent: c.title }), make("p", { textContent: c.text })));
@@ -141,6 +143,7 @@ function stepOneRefusal(e, pkg) {
 
 async function loadFile(file, source = "") {
   state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; $("after").hidden = true;
+  $("wipe").checked = false;   // a full wipe is chosen for one install, never carried over to the next file
   $("fileinfo").hidden = true;
   if (file) {
     try {
@@ -149,6 +152,7 @@ async function loadFile(file, source = "") {
       $("drop-name").textContent = file.name;
       state.pkg = pkg;
       if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
+      if (pkg.kind === "stock") state.stock = pkg;
       $("f-name").textContent = file.name;
       $("f-source").textContent = source; $("f-source").hidden = $("f-source-t").hidden = !source;
       $("f-id").textContent = pkg.product;
@@ -446,6 +450,31 @@ $("donor").addEventListener("change", async () => {
 });
 $("risk").addEventListener("change", refresh);
 
+// ------------------------------------------------------------- full wipe ---
+// The package this page writes for a full wipe: the official loader, V15's startup code, the chosen firmware's app area
+// and erased flash (0xFF) up to WIPE_END. The format is the one of Baudgirl's releases (V15 with another flash.bin), which
+// rebuild() reproduces byte for byte.
+async function wipePackage(pkg) {
+  const stock = state.stock;
+  const raw = rebuild(stock.image, wipeFlash(stock, pkg), pkg.product);
+  const built = await inspect(raw);
+  return built;
+}
+
+$("stock-open").addEventListener("click", () => { $("sdlg-main").textContent = state.pkg ? state.pkg.name : ""; $("sdlg-msg").hidden = true; $("stock-dialog").showModal(); });
+$("sdlg-close").addEventListener("click", () => $("stock-dialog").close());
+$("stockfile").addEventListener("change", async () => {
+  const f = $("stockfile").files[0], msg = $("sdlg-msg");
+  if (!f) return;
+  try {
+    const d = await inspect(await f.arrayBuffer());
+    if (d.kind === "stock") { d.name = f.name; state.stock = d; $("stock-dialog").close(); }
+    else { msg.textContent = `${f.name} is not the official V15 package (its hash is not V15's).`; msg.className = "small err"; msg.hidden = false; }
+  } catch (e) { msg.textContent = `${f.name}: ${e.message}`; msg.className = "small err"; msg.hidden = false; }
+  refresh();
+});
+$("wipe").addEventListener("change", refresh);
+
 function refresh() {
   const dev = selectedDevice(), pkg = state.pkg;
   const resume = dev && IS_OTA(dev.id);
@@ -457,7 +486,15 @@ function refresh() {
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (pkg.kind === "other" && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
   $("go").textContent = resume ? "Finish update" : "Install";
-  $("install-row").hidden = !!why || state.busy || state.done;
+  $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock);
+  const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400;
+  $("wipe-row").hidden = !canWipe;
+  if (canWipe) {
+    $("wipe-info").textContent = state.stock
+      ? `Erases every sector from the start of the app area to ${hex(WIPE_END)} and writes ${pkg.product} there, the way a Baudgirl package covers its range. Saved projects and settings that any firmware keeps in that range are lost. M-VAVE's loader also rewrites the FM-1's startup code with V15's. Using ${state.stock.name || "the official V15 package"}.`
+      : "Needs the official V15 package: M-VAVE's loader and the startup code it writes come from it.";
+    $("wipe-pick").hidden = !!state.stock;
+  }
   $("rescan").disabled = state.busy || !state.up;
   $("connect-row").hidden = !pkg || !!state.access;
   $("file").disabled = state.busy;
@@ -490,13 +527,18 @@ async function install(startup = null) {
   up.setPatterns(state.up.patterns);
   up.select(dev.name);
   for (const d of state.devices) up.allow(d.name);
-  const total = Math.max(1, Math.round(pkg.image.length / 512));
+  let sent = pkg;
+  if (!resume && wipeOn() && state.stock) {
+    sent = await wipePackage(pkg);
+    log(`wipe package: ${sent.product}, flash.bin ${hex(sent.flashLen)}, ${sent.image.length} bytes`);
+  }
+  const total = Math.max(1, Math.round(sent.image.length / 512));
   let pct = 0;
   const to = (p, text) => { pct = p; bar(p); phase(text ?? `Writing ${Math.round(p)}%`); };
   let reads = 0, wrote = false;
   const step = (k, a) => {
     log(`${k} ${a ?? ""}`);
-    if (k === "start") note("info", "STARTED", "Update started", `Asked ${a} to start an update.`);
+    if (k === "start") note("info", "STARTED", "Update started", `Asked ${a} to start an update.` + (sent !== pkg ? ` Full wipe: the package written covers flash up to ${hex(WIPE_END)}.` : ""));
     if (k === "verify") reads = a;
     if (k === "loader") note("go", "ACCEPTED", "Step 1: accepted", `${dev.id.text} read ${reads} parts of the package, found nothing to refuse, and restarted into the update loader.`);
     if (k === "write" && !wrote) { wrote = true; note("info", "WRITING", "Update loader running", "Writing the package to the FM-1. Do not unplug it."); }
@@ -515,7 +557,7 @@ async function install(startup = null) {
       if (!done) throw Object.assign(new Error(), { code: "stopped" });
       say(`Done: the FM-1 runs ${pkg.product}.`, "ok");
     } else {
-      const id = await up.install(pkg.image, pkg.product, step, startup);
+      const id = await up.install(sent.image, pkg.product, step, startup);
       say(`Done: the FM-1 runs ${id}.`, "ok");
     }
   } catch (e) {

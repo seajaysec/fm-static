@@ -74,6 +74,11 @@
         <button id="boot-check" class="small" hidden>Nothing shows up: is it in boot mode?</button></p>
       <div id="boot-msg" hidden></div>
       <ol id="route-dev" class="route"></ol>
+      <div id="wipe-row" class="wipe" hidden>
+        <label><input id="wipe" type="checkbox"> Erase flash up to 0xBA000 while installing (full wipe)</label>
+        <p id="wipe-info" class="small"></p>
+        <p id="wipe-pick" class="small" hidden><button id="stock-open" class="small" type="button">Choose the official V15 package</button></p>
+      </div>
       <p id="install-row" class="next" hidden><button id="go">Install</button> <span id="why" class="small"></span></p>
 
       <div id="after" hidden>
@@ -133,9 +138,19 @@
     <p><button id="dlg-close" class="small" type="button">Close</button></p>
   </dialog>
 
+  <dialog id="stock-dialog" aria-labelledby="sdlg-h">
+    <h3 id="sdlg-h">One more file: official V15</h3>
+    <p>You already chose <b id="sdlg-main"></b>. That is the firmware that ends up on your FM-1.</p>
+    <p>A full wipe is written by M-VAVE's update loader, which comes with the official V15 package: the page builds the
+      package it writes from the V15 loader and startup code plus your firmware. Only those parts of the V15 file are used.</p>
+    <p><input id="stockfile" type="file" accept=".fwsc" aria-label="Official V15 package"></p>
+    <p id="sdlg-msg" class="small" hidden></p>
+    <p><button id="sdlg-close" class="small" type="button">Close</button></p>
+  </dialog>
+
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.9</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.11</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.9"></script>
+<script type="module" src="src/app.js?v=2026-10-25.11"></script>
 </body>
 </html>
