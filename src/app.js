@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.8";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.8";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.8";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.9";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.9";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.9";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.8";
+const VERSION = "2026-10-25.9";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -44,7 +44,7 @@ const kindText = {
 
 const loaderText = {
   official: "M-VAVE's update loader. Felucca's source says it rewrites the whole flash.bin, the FM-1's startup code included.",
-  app: "An app-area-only loader (Felucca's design, which JIANT's source keeps). It writes the firmware area and, per that source, leaves the startup code and the data area alone.",
+  app: "An app-area-only loader (Felucca's design). It writes the firmware area and, per Felucca's source, leaves the startup code and the data area alone.",
   unknown: "Not one this page recognises.",
 };
 
@@ -125,7 +125,7 @@ function renderRoute() {
 // after a step-1 stop on a Felucca-family firmware: the request count says which check refused (Felucca's ota.c
 // ota_stage: 2 reads of the UFW header, 1 of the loader's header, then the startup code compared 512 bytes at a time)
 function stepOneRefusal(e, pkg) {
-  // The request counts are read from Felucca's ota.c and JIANT's (both compiled and run on the host); other
+  // The request counts are read from Felucca's ota.c and a second Felucca-family build's (both compiled and run on the host); other
   // Felucca-family builds are assumed to share them and are not checked.
   if (e.code !== "stopped" || e.step !== 1 || !e.from || family(e.from) !== "app") return "";
   const head = `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written.`;
