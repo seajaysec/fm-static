@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.12";
-import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.12";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.12";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.13";
+import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.13";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.13";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.12";
+const VERSION = "2026-10-25.13";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -77,6 +77,8 @@ function fileChecks(pkg) {
   if (pkg) {
     add("go", "CLEAR", "Package intact", `${pkg.product}. The header and flash.bin checksums match.`);
     add("info", "SEEN", "What the file is", shapeText(pkg));
+    if (pkg.provenance) add("go", "BUILT", "Built by GitHub Actions", `${builtText(pkg.provenance)}${pkg.provenance.workflow ? ", workflow " + pkg.provenance.workflow : ""}. GitHub reports this record for this file's hash; it shows where the file came from, not that the code is safe.`);
+    else if (pkg.provenance === null) add("info", "SEEN", "No GitHub build record", `GitHub holds no build attestation for this exact file in ${pkg.provenanceRepo}, so nothing here says where it was built.`);
   }
   return out;
 }
@@ -151,6 +153,7 @@ async function loadFile(file, source = "") {
       pkg.name = file.name;
       $("drop-name").textContent = file.name;
       state.pkg = pkg;
+      if (source) provenance(pkg, source);
       if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
       if (pkg.kind === "stock") state.stock = pkg;
       $("f-name").textContent = file.name;
@@ -236,6 +239,33 @@ $("url-form").addEventListener("submit", async (ev) => {
 });
 
 // ------------------------------------------------------------ GitHub repos ---
+// GitHub keeps build attestations (signed records of which workflow built a file from which commit) and looks them up by
+// the file's SHA-256, per repo. -> { repo, ref, commit, workflow, builder } | null (none) | undefined (could not ask).
+// This reports what GitHub says; the signature is not checked here, and anyone can attest a file in their own repo.
+async function attestation(owner, repo, sha256) {
+  try {
+    const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/attestations/sha256:${sha256}`);
+    if (r.status === 404) return null;
+    if (!r.ok) return undefined;
+    for (const a of (await r.json()).attestations || []) {
+      const st = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(a.bundle.dsseEnvelope.payload), (c) => c.charCodeAt(0))));
+      if (!(st.subject || []).some((s) => (s.digest || {}).sha256 === sha256)) continue;
+      const def = (st.predicate || {}).buildDefinition || {}, dep = (def.resolvedDependencies || [])[0] || {};
+      const m = /github\.com\/([^@/]+\/[^@]+)@(.+)$/.exec(dep.uri || "");
+      return { repo: m ? m[1] : `${owner}/${repo}`, ref: m ? m[2].replace(/^refs\/(tags|heads)\//, "") : "", commit: (dep.digest || {}).gitCommit || "",
+        workflow: ((def.externalParameters || {}).workflow || {}).path || "", builder: (((st.predicate || {}).runDetails || {}).builder || {}).id || "" };
+    }
+    return null;
+  } catch (_) { return undefined; }
+}
+const builtText = (a) => `built by GitHub Actions from ${a.repo}${a.ref ? " " + a.ref : ""}${a.commit ? ", commit " + a.commit.slice(0, 7) : ""}`;
+
+async function provenance(pkg, source) {
+  const m = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\//.exec(source);
+  if (!m) return;
+  const a = await attestation(m[1], m[2], pkg.sha256);
+  if (state.pkg === pkg) { pkg.provenance = a; pkg.provenanceRepo = `${m[1]}/${m[2]}`; refresh(); }
+}
 // github.com's own pages cannot be read by other pages, but its API and raw file host can. A repo's committed .fwsc
 // files (default branch and gh-pages) load directly. Release downloads cannot be read by a web page (GitHub redirects
 // them to a host that does not allow it), so those are listed with a link to download them and drop them above.
@@ -268,6 +298,9 @@ async function githubRepo(page) {
     const loadable = new Set([...found.values()].map((u) => decodeURIComponent(u.pathname.split("/").pop()).toLowerCase()));
     const rel = (await api("/releases?per_page=30")).flatMap((r) => r.assets.filter((a) => /\.fwsc$/i.test(a.name)).map((a) => ({ name: a.name, tag: r.tag_name, href: a.browser_download_url })))
       .filter((a) => !loadable.has(a.name.toLowerCase()));
+    const rows = (await api("/releases?per_page=30")).flatMap((r) => r.assets.filter((a) => /\.fwsc$/i.test(a.name)));
+    const digests = new Map(rows.map((a) => [a.name, (a.digest || "").replace(/^sha256:/, "")]));
+    await Promise.all(rel.slice(0, 10).map(async (a) => { const d = digests.get(a.name); if (d) { const b = await attestation(owner, info.name, d); if (b) a.built = builtText(b); else if (b === null) a.built = "no GitHub build record"; } }));
     if (!found.size && !rel.length) { urlMsg(`No .fwsc files in ${owner}/${repo}: not committed on ${want.join(" or ")}, and none attached to a release. Its firmware may need building from source, which this page cannot do.`, "small err"); return; }
     if (found.size === 1 && !rel.length) { await useUrl([...found.values()][0]); return; }
     showList([...found.values()], rel);
@@ -298,7 +331,7 @@ function showList(urls, downloadOnly = []) {
     make("option", { value: "name", textContent: "A to Z" }));
   const row = make("li", { className: "sortrow" }, sel);
   const only = downloadOnly.map((a) => make("li", {}, make("span", { className: "dname", textContent: a.name }),
-    make("span", { className: "meta", textContent: `release ${a.tag}: GitHub only lets you download this one yourself, then drop it in the box above` }),
+    make("span", { className: "meta", textContent: `release ${a.tag}${a.built ? ": " + a.built : ""}. GitHub only lets you download this one yourself, then drop it in the box above` }),
     make("a", { href: a.href, target: "_blank", rel: "noopener", textContent: "Download", className: "dl" })));
   const draw = () => $("url-results").replaceChildren(row, ...[...urls].sort(sel.value === "name" ? byName : byVersion).map((u) => {
     const b = make("button", { className: "small", type: "button", textContent: "Use this file" });

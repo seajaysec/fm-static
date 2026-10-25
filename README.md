@@ -25,6 +25,9 @@ If your firmware's own updater, or M-VAVE's, works for you, use that instead.
   so every sector in that range is erased first (saved projects and settings kept there are lost). The package is built
   from the official V15 package's loader and startup code plus the chosen firmware's app area, the way a Baudgirl
   release is V15 with another flash.bin; the builder reproduces all ten Baudgirl packages inspected byte for byte.
+- Can read a GitHub repository address: it lists the `.fwsc` files committed in the repo (loadable) and attached to
+  releases (download-only: GitHub does not let a web page read those). For files GitHub holds a build attestation for, it
+  shows which workflow built them from which commit; it reports what GitHub says and does not verify the signature.
 - Lists every MIDI port. Ports with a usual FM-1 name are asked who they are; any other port is sent
   nothing until you press **Try this port** on it.
 - Lets you keep your own port names, so the page finds your FM-1 by itself next time (stored in
