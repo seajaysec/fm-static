@@ -47,6 +47,43 @@ Needs Chrome or Edge on a computer (Web MIDI with SysEx). Installing firmware is
 
 To fix the name itself on a Mac: Audio MIDI Setup, Window, Show MIDI Studio, double-click the device.
 
+## How it gets past a snag
+
+Where the page checks something, what it does when the check fails, and what you are offered. Steps marked "Not tested on
+a device" have not been run on an FM-1.
+
+```mermaid
+flowchart TD
+  A[Choose a .fwsc: drop it, or paste a page or GitHub address] --> B[Read the file: checksums, identity, loader, size]
+  B --> C{Checksums match?}
+  C -- no --> C1[Stop: damaged file or not an FM-1 package]
+  C -- yes --> D[Connect: ask ports with usual FM-1 names who they are]
+  D --> E{FM-1 answered?}
+  E -- no --> F[List every port: press Try on yours, or add its name]
+  F --> G{Answered?}
+  G -- no --> H[Nothing is sent to other ports. Check the cable and other apps using MIDI. Boot mode button: not tested on a device]
+  E -- yes --> I[Device facts: port, running firmware family]
+  G -- yes --> I
+  I --> J{Right model?}
+  J -- no --> J1[Stop: the only thing refused. Not tested on a device]
+  J -- yes --> K[Unknown-origin file: confirm a source you trust. Optional: full wipe up to 0xBA000]
+  K --> M[Install. Step 1: the running firmware reads the package]
+  M --> N{Accepted?}
+  N -- yes --> O[Loader writes, FM-1 restarts, identity checked. Done]
+  N -- no --> Q[Nothing written. The page names the check from how many parts were read. 2: size, install V15's size first. 3: loader, pick another package. 4: startup code, restore step, not tested on a device. Other: replug and retry]
+  M --> S[Cut off mid-write: Finish update appears. Not tested on a device]
+```
+
+## What has and has not been tested
+
+Run on a real FM-1 (macOS, Chrome): installs in every direction between official V15, Baudgirl releases, Felucca-family
+firmwares and Mutable Dreams, with and without the full wipe; a package found through a GitHub address; an FM-1 whose port
+name the page does not recognise (found with Try this port, then followed through the update loader).
+
+Not tested on a device: finishing an interrupted update, the startup-code refusal and the restore step, boot-mode
+detection, the wrong-model refusal. Out of scope: how the firmware sounds, the SMK-37 (it may work; completely untested),
+browsers other than Chrome.
+
 ## Lineage and licence
 
 The update protocol and package reading come from [Felucca](https://github.com/hugelton/Felucca)'s

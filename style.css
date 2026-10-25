@@ -184,3 +184,10 @@ dialog h3 { margin-top: 0; }
 #restore p, #restore li, #wipe-row p { max-width: 60ch; }
 
 .risk b { display: inline; }
+
+/* the flowchart: one drawing per theme */
+.diagram { overflow-x: auto; }
+.diagram svg { display: block; width: 100%; height: auto; max-width: 760px; margin: 0 auto; min-width: 560px; }
+.dg-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dg-light { display: none; } :root:not([data-theme="light"]) .dg-dark { display: block; } }
+:root[data-theme="dark"] .dg-light { display: none; } :root[data-theme="dark"] .dg-dark { display: block; }
