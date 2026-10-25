@@ -113,13 +113,25 @@
         <p class="small">Lower the odds: USB straight into the computer, laptop on power, this tab in front the whole time. If
           the write is cut off while the FM-1 is in update mode, replug it and press Finish update.</p>
       </div>
-      <p><label class="filelabel">Felucca-family package for the startup code <input id="donor" type="file" accept=".fwsc"></label></p>
-      <p id="donor-info" class="small" hidden></p>
+      <p id="donor-info" class="small"></p>
+      <p><button id="donor-open" class="small" type="button">Choose the file for the startup code</button></p>
       <p class="trust"><label><input id="risk" type="checkbox"> I understand this can leave my FM-1 needing a boot-mode rescue<span id="risk-more"></span>.</label></p>
       <p><button id="restore-go" disabled>Restore startup code and install</button></p>
     </div>
     <details><summary>Log</summary><pre id="log"></pre></details>
   </section>
+
+  <dialog id="donor-dialog" aria-labelledby="dlg-h">
+    <h3 id="dlg-h">One more file: the startup code</h3>
+    <p>You already chose <b id="dlg-main"></b>. That is the firmware that gets written to your FM-1.</p>
+    <p>The refused check needs something different: the startup code your FM-1 has <i>now</i>, to answer with. It is inside
+      any package of the firmware your FM-1 runs now (<b id="dlg-run"></b>); the file you installed it from is ideal.
+      Only 16 KB of this file is read. Nothing from it is written.</p>
+    <p class="small">You would not be asked if you had loaded such a package on this page earlier: it would have been used.</p>
+    <p><input id="donor" type="file" accept=".fwsc" aria-label="Package of the firmware the FM-1 runs now"></p>
+    <p id="dlg-msg" class="small" hidden></p>
+    <p><button id="dlg-close" class="small" type="button">Close</button></p>
+  </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.</footer>
 </main>

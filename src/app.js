@@ -15,6 +15,7 @@ const state = {
   tried: new Map(),            // port -> "no answer" after a manual try
   refusedStartup: false,       // the running firmware stopped at its startup-code check (see stepOneRefusal)
   donor: null,                 // a Felucca-family package whose startup code answers that check
+  known: new Map(),            // Felucca-family packages loaded on this page, by identity: reused as that package
 };
 
 const log = (s) => { $("log").textContent += s + "\n"; $("log").scrollTop = 1e9; };
@@ -126,13 +127,14 @@ function stepOneRefusal(e, pkg) {
 // ---------------------------------------------------------------- firmware ---
 
 async function loadFile(file) {
-  state.pkg = null; state.done = false; state.refusedStartup = false;
+  state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null;
   $("fileinfo").hidden = true;
   if (file) {
     try {
       const pkg = await inspect(await file.arrayBuffer());
       pkg.name = file.name;
       state.pkg = pkg;
+      if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
       $("f-name").textContent = file.name;
       $("f-id").textContent = pkg.product;
       $("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
@@ -281,22 +283,39 @@ async function tryPort(name, button) {
 
 function selectedDevice() { return state.devices.find((d) => d.name === state.selected) || null; }
 
-// the donor must be a Felucca-family package (app-area loader, startup code not V15's) laid out like the package
-function donorFits(d, pkg) {
-  return !!d && d.loader === "app" && !d.stockHead && !!d.startup && d.flashOff === pkg.flashOff;
+// a Felucca-family package: app-area loader, startup code not V15's
+const isFamilyFile = (d) => d.loader === "app" && !d.stockHead && !!d.startup;
+const donorFits = (d, pkg) => isFamilyFile(d) && d.flashOff === pkg.flashOff;
+
+// the package whose startup code answers the check: the one chosen in the dialog, else a Felucca-family package
+// loaded on this page before (the same firmware as the FM-1 runs if there is one, else any: those carried identical
+// startup code in every package inspected, and if one is wrong the firmware refuses again and nothing is written)
+function startupSource(dev, pkg) {
+  if (state.donor) return { d: state.donor, why: "the file you chose" };
+  const same = dev && state.known.get(dev.id.text);
+  if (same && donorFits(same, pkg)) return { d: same, why: `${same.name}, which you loaded earlier and is the firmware your FM-1 runs` };
+  const any = [...state.known.values()].find((d) => donorFits(d, pkg));
+  if (any) return { d: any, why: `${any.name}, which you loaded earlier (a different Felucca-family firmware than ${dev ? dev.id.text : "the one on your FM-1"}; their startup code was identical in every package inspected)` };
+  return null;
 }
 
+$("donor-open").addEventListener("click", () => {
+  const dev = selectedDevice();
+  $("dlg-main").textContent = state.pkg ? state.pkg.name : "";
+  $("dlg-run").textContent = dev ? dev.id.text : "";
+  $("dlg-msg").hidden = true;
+  $("donor-dialog").showModal();
+});
+$("dlg-close").addEventListener("click", () => $("donor-dialog").close());
 $("donor").addEventListener("change", async () => {
-  state.donor = null;
-  const f = $("donor").files[0], info = $("donor-info");
-  info.hidden = !f;
-  if (f) {
-    try {
-      const d = await inspect(await f.arrayBuffer());
-      if (donorFits(d, state.pkg)) { state.donor = d; info.textContent = `${d.product}: its startup code (16 KB) will answer the check.`; info.className = "small"; }
-      else { info.textContent = `${d.product} does not carry a Felucca-family startup code. Pick a package of the firmware that is on your FM-1 now.`; info.className = "small err"; }
-    } catch (e) { info.textContent = `${f.name}: ${e.message}`; info.className = "small err"; }
-  }
+  const f = $("donor").files[0], msg = $("dlg-msg");
+  if (!f) return;
+  try {
+    const d = await inspect(await f.arrayBuffer());
+    d.name = f.name;
+    if (donorFits(d, state.pkg)) { state.donor = d; $("donor-dialog").close(); }
+    else { msg.textContent = `${f.name} (${d.product}) carries no Felucca-family startup code. Pick a package of the firmware your FM-1 runs now.`; msg.className = "small err"; msg.hidden = false; }
+  } catch (e) { msg.textContent = `${f.name}: ${e.message}`; msg.className = "small err"; msg.hidden = false; }
   refresh();
 });
 $("risk").addEventListener("change", refresh);
@@ -321,7 +340,13 @@ function refresh() {
   const big = !!pkg && pkg.flashLen > APP_END;
   $("risk-data").hidden = !big;
   $("risk-more").textContent = big ? " and replace saved data above 0x93000" : "";
-  $("restore-go").disabled = state.busy || !state.donor || !$("risk").checked;
+  const src = pkg && dev ? startupSource(dev, pkg) : null;
+  $("donor-info").textContent = src
+    ? `Startup code: from ${src.why}. Only its first 16 KB is read.`
+    : "Needed: a package of the firmware your FM-1 runs now, for its startup code. This is in addition to the file you chose, which is what gets written.";
+  $("donor-info").className = "small" + (src ? "" : " warn");
+  $("donor-open").textContent = src ? "Use a different file for the startup code" : "Choose the file for the startup code";
+  $("restore-go").disabled = state.busy || !src || !$("risk").checked;
 
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
@@ -378,6 +403,7 @@ $("connect").addEventListener("click", connect);
 $("rescan").addEventListener("click", scan);
 $("go").addEventListener("click", () => install());
 $("restore-go").addEventListener("click", () => {
-  if (state.donor && $("risk").checked) install({ at: state.pkg.flashOff, bytes: state.donor.startup });
+  const src = startupSource(selectedDevice(), state.pkg);
+  if (src && $("risk").checked) install({ at: state.pkg.flashOff, bytes: src.d.startup });
 });
 refresh();
