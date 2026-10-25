@@ -43,26 +43,23 @@
         <dt>SHA-256</dt><dd id="f-sha" class="mono hash"></dd>
         <dt>Origin</dt><dd id="f-kind"></dd>
         <dt>Loader</dt><dd id="f-loader"></dd>
-        <dt>Shape</dt><dd id="f-shape"></dd>
       </dl>
-      <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from someone I trust and accept the risk of installing it.</label></p>
+      <ol id="route-file" class="route"></ol>
+      <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from a source I trust and accept the risk of installing it.</label></p>
+      <p id="connect-row" class="next"><button id="connect">Connect your FM-1</button> <span class="small">Next: this page checks the FM-1 against the file.</span></p>
     </div>
   </section>
 
-  <section class="stage" id="st-dev">
+  <section class="stage" id="st-dev" hidden>
     <h2>Your FM-1</h2>
-    <p id="connect-row"><button id="connect">Connect</button></p>
-    <div id="devices" hidden>
+    <div id="devices">
       <div id="device-list"></div>
       <p id="none" class="dim" hidden>Nothing answered under a usual FM-1 port name. Pick your FM-1 in the port list below.</p>
-
-      <h3>MIDI ports</h3>
-      <p class="small">Every port your computer sees. Ports with a usual FM-1 name are asked who they are automatically; any other port is sent nothing until you press <b>Try</b> on it. On a Mac a port can keep the name of another device last plugged into that USB socket (Audio MIDI Setup, Window, Show MIDI Studio, renames it).</p>
-      <ul id="ports" class="plain"></ul>
-      <p id="ports-empty" class="small dim" hidden>No other ports. If your FM-1 is missing, check the USB cable: it must carry data.</p>
-
       <details>
-        <summary>Port names the page looks for</summary>
+        <summary>MIDI ports and names</summary>
+        <p class="small">Every port your computer sees. Ports with a usual FM-1 name are asked who they are automatically; any other port is sent nothing until you press <b>Try</b> on it. On a Mac a port can keep the name of another device last plugged into that USB socket (Audio MIDI Setup, Window, Show MIDI Studio, renames it).</p>
+        <ul id="ports" class="plain"></ul>
+        <p id="ports-empty" class="small dim" hidden>No other ports. If your FM-1 is missing, check the USB cable: it must carry data.</p>
         <p class="small">A port with one of these in its name is found automatically. Add the name your FM-1 shows up under; it is kept in this browser.</p>
         <ul id="presets" class="chips" aria-label="Built-in names"></ul>
         <ul id="custom" class="chips" aria-label="Your names"></ul>
@@ -71,59 +68,53 @@
       <p class="after"><button id="rescan" class="small">Rescan</button>
         <button id="boot-check" class="small" hidden>Nothing shows up: is it in boot mode?</button></p>
       <div id="boot-msg" hidden></div>
-    </div>
-  </section>
+      <ol id="route-dev" class="route"></ol>
+      <p id="install-row" class="next" hidden><button id="go">Install</button> <span id="why" class="small"></span></p>
 
-  <section class="stage" id="st-route">
-    <h2>What this page sees, in order</h2>
-    <p class="lead dim">Facts first. Once you press Install, each thing the FM-1 does is added here as it happens. Nothing blocks an install except a wrong model.</p>
-    <ol id="route" class="route">
-      <li class="cp" data-state="idle"><span class="plate"><span>WAITING</span></span><div><b>Nothing to check yet</b><p>Checkpoints appear once there is a firmware file and an FM-1.</p></div></li>
-    </ol>
-  </section>
-
-  <section class="stage" id="st-go">
-    <h2>Install</h2>
-    <p class="installrow"><button id="go" disabled>Install</button> <span id="why" class="small"></span></p>
-    <div id="road" aria-hidden="true" hidden><i id="road-fill"></i></div>
-    <p id="phase" class="small dim" role="status"></p>
-    <p id="status" role="status"></p>
-
-    <div id="restore" class="restore" hidden>
-      <h3>Restore official startup code</h3>
-      <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
-        startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
-        loader writes the package, its own startup code included.</p>
-      <div class="risk">
-        <h4>This part carries real risk. Here is what, and why.</h4>
-        <ul>
-          <li><b>It rewrites the one region a failed write can leave unbootable.</b> The first 16 KB of flash holds the
-            code that starts the update loader. Felucca's own loader leaves it alone. If power or USB drops while it is being
-            rewritten, the FM-1 may not start.</li>
-          <li><b>This page cannot recover it.</b> If a write is cut off badly, the FM-1 may stop starting and fall back to the
-            chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057), which does not depend on that flash. This page can recognise that
-            state (the "boot mode" button under Your FM-1) and point you to an open tool, but it cannot write from there, and
-            that way back has not been tested. Treat this mode as one with no undo.</li>
-          <li><b>Not tested on a device.</b> Felucca's source says M-VAVE's updater rewrites that region as part of every update, with bytes equal to what is already there.
-            Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca-family
-            step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
-            inside it can't be ruled out.</li>
-          <li id="risk-data" hidden><b>This package can overwrite saved data.</b> Its flash.bin is larger than V15's, so the
-            loader also overwrites flash above 0x93000, where Felucca-family firmwares keep saved projects. V15 itself stops
-            at 0x93000 and leaves them.</li>
-          <li><b>It can also do nothing.</b> If the file you pick does not carry the startup code that is on your FM-1, the
-            firmware refuses again and nothing is written.</li>
-        </ul>
-        <p class="small">Lower the odds: USB straight into the computer, laptop on power, this tab in front the whole time. If
-          the write is cut off while the FM-1 is in update mode, replug it and press Finish update.</p>
+      <div id="after" hidden>
+        <div id="road" aria-hidden="true" hidden><i id="road-fill"></i></div>
+        <p id="phase" class="small dim" role="status"></p>
+        <ol id="route-events" class="route"></ol>
+        <div id="restore" class="restore" hidden>
+          <h3>Restore official startup code</h3>
+          <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
+            startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
+            loader writes the package, its own startup code included.</p>
+          <div class="risk">
+            <h4>This part carries real risk. Here is what, and why.</h4>
+            <ul>
+              <li><b>It rewrites the one region a failed write can leave unbootable.</b> The first 16 KB of flash holds the
+                code that starts the update loader. Felucca's own loader leaves it alone. If power or USB drops while it is being
+                rewritten, the FM-1 may not start.</li>
+              <li><b>This page cannot recover it.</b> If a write is cut off badly, the FM-1 may stop starting and fall back to the
+                chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057), which does not depend on that flash. This page can recognise that
+                state (the "boot mode" button under Your FM-1) and point you to an open tool, but it cannot write from there, and
+                that way back has not been tested. Treat this mode as one with no undo.</li>
+              <li><b>Not tested on a device.</b> Felucca's source says M-VAVE's updater rewrites that region as part of every update, with bytes equal to what is already there.
+                Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca-family
+                step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
+                inside it can't be ruled out.</li>
+              <li id="risk-data" hidden><b>This package can overwrite saved data.</b> Its flash.bin is larger than V15's, so the
+                loader also overwrites flash above 0x93000, where Felucca-family firmwares keep saved projects. V15 itself stops
+                at 0x93000 and leaves them.</li>
+              <li><b>It can also do nothing.</b> If the file you pick does not carry the startup code that is on your FM-1, the
+                firmware refuses again and nothing is written.</li>
+            </ul>
+            <p class="small">Lower the odds: USB straight into the computer, laptop on power, this tab in front the whole time. If
+              the write is cut off while the FM-1 is in update mode, replug it and press Finish update.</p>
+          </div>
+          <p id="donor-info" class="small"></p>
+          <p><button id="donor-open" class="small" type="button">Choose the file for the startup code</button></p>
+          <p class="trust"><label><input id="risk" type="checkbox"> I understand this can leave my FM-1 needing a boot-mode rescue<span id="risk-more"></span>.</label></p>
+          <p><button id="restore-go" disabled>Restore startup code and install</button></p>
+        </div>
       </div>
-      <p id="donor-info" class="small"></p>
-      <p><button id="donor-open" class="small" type="button">Choose the file for the startup code</button></p>
-      <p class="trust"><label><input id="risk" type="checkbox"> I understand this can leave my FM-1 needing a boot-mode rescue<span id="risk-more"></span>.</label></p>
-      <p><button id="restore-go" disabled>Restore startup code and install</button></p>
+      <p id="status" role="status"></p>
+      <details id="logbox" hidden><summary>Log</summary><pre id="log"></pre></details>
+
     </div>
-    <details><summary>Log</summary><pre id="log"></pre></details>
   </section>
+
 
   <dialog id="donor-dialog" aria-labelledby="dlg-h">
     <h3 id="dlg-h">One more file: the startup code</h3>
@@ -138,8 +129,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.3</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.4</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.3"></script>
+<script type="module" src="src/app.js?v=2026-10-25.4"></script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.3";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.3";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.3";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.4";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.4";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.4";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.3";
+const VERSION = "2026-10-25.4";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -15,13 +15,14 @@ const state = {
   pkg: null, access: null, up: null, devices: [], selected: null, busy: false, scanning: false, done: false,
   names: loadNames(),          // port names the user added
   tried: new Map(),            // port -> "no answer" after a manual try
+  frozen: null,                // the device facts as they were when the install started
   events: [],                  // what happened during the install, shown on the route
   refusedStartup: false,       // the running firmware stopped at its startup-code check (see stepOneRefusal)
   donor: null,                 // a Felucca-family package whose startup code answers that check
   known: new Map(),            // Felucca-family packages loaded on this page, by identity: reused as that package
 };
 
-const log = (s) => { $("log").textContent += s + "\n"; $("log").scrollTop = 1e9; };
+const log = (s) => { $("logbox").hidden = false; $("log").textContent += s + "\n"; $("log").scrollTop = 1e9; };
 const say = (s, cls = "") => { const e = $("status"); e.textContent = s; e.className = cls; };
 const phase = (s) => { $("phase").textContent = s; };
 const bar = (pct) => { $("road").hidden = false; $("road-fill").style.width = `${pct}%`; };
@@ -69,13 +70,18 @@ const familyText = { official: "an official M-VAVE release other than V15", mvav
 // What was observed before anything is sent: facts only. Nothing here predicts what the FM-1's firmware will do; that
 // is shown when it happens (events, below).
 // -> [{ state: go | info | detour | barrier | idle, plate, title, text }]
-function checks(dev, pkg) {
+function fileChecks(pkg) {
   const out = [];
   const add = (st, plate, title, text) => out.push({ state: st, plate, title, text });
   if (pkg) {
     add("go", "CLEAR", "Package intact", `${pkg.product}. The header and flash.bin checksums match.`);
     add("info", "SEEN", "What the file is", shapeText(pkg));
   }
+  return out;
+}
+function devChecks(dev, pkg) {
+  const out = [];
+  const add = (st, plate, title, text) => out.push({ state: st, plate, title, text });
   if (dev) {
     const usual = state.up.patterns.some((p) => dev.name.toLowerCase().includes(p.toLowerCase()));
     if (!usual) {
@@ -92,20 +98,26 @@ function checks(dev, pkg) {
     if (pkg && !IS_OTA(dev.id) && dev.id.model !== pkg.model)
       add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
   }
-  if (!out.length) add("idle", "WAITING", "Nothing to check yet", "Checkpoints appear once there is a firmware file and an FM-1.");
+  if (!out.length) add("idle", "WAITING", "No FM-1 selected", "Pick your FM-1 above, or press Rescan.");
   return out;
 }
 
 // what happens during an install, in order, as it happens
-function note(st, plate, title, text) { state.events.push({ state: st, plate, title, text }); renderRoute(); }
+function note(st, plate, title, text) { state.events.push({ state: st, plate, title, text }); $("after").hidden = false; renderRoute(); }
 
+const items = (list) => list.map((c) => {
+  const li = make("li", { className: "cp" }, make("span", { className: "plate" }, make("span", { textContent: c.plate })),
+    make("div", {}, make("b", { textContent: c.title }), make("p", { textContent: c.text })));
+  li.dataset.state = c.state;
+  return li;
+});
+
+// The facts about the device are frozen when an install starts: the device is not the one it was afterwards
+// (it restarts as the new firmware), and the route must keep saying what was true at the start.
 function renderRoute() {
-  $("route").replaceChildren(...[...checks(selectedDevice(), state.pkg), ...state.events].map((c) => {
-    const li = make("li", { className: "cp" }, make("span", { className: "plate" }, make("span", { textContent: c.plate })),
-      make("div", {}, make("b", { textContent: c.title }), make("p", { textContent: c.text })));
-    li.dataset.state = c.state;
-    return li;
-  }));
+  $("route-file").replaceChildren(...items(fileChecks(state.pkg)));
+  $("route-dev").replaceChildren(...items(state.frozen || devChecks(selectedDevice(), state.pkg)));
+  $("route-events").replaceChildren(...items(state.events));
 }
 
 // after a step-1 stop on a Felucca-family firmware: the request count says which check refused (Felucca's ota.c
@@ -126,7 +138,7 @@ function stepOneRefusal(e, pkg) {
 // ---------------------------------------------------------------- firmware ---
 
 async function loadFile(file) {
-  state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = [];
+  state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; $("after").hidden = true;
   $("fileinfo").hidden = true;
   if (file) {
     try {
@@ -142,7 +154,6 @@ async function loadFile(file) {
       $("f-kind").textContent = kindText[pkg.kind];
       $("f-kind").className = pkg.kind === "other" ? "warn" : "";
       $("f-loader").textContent = loaderText[pkg.loader];
-      $("f-shape").textContent = shapeText(pkg);
       $("trust-row").hidden = pkg.kind !== "other";
       $("trust").checked = false;
       $("fileinfo").hidden = false;
@@ -218,8 +229,8 @@ async function connect() {
   applyNames();
   let t = null;
   state.access.onstatechange = () => { clearTimeout(t); t = setTimeout(() => { if (!state.busy) scan(); }, 700); };
-  $("connect").hidden = true;
-  $("devices").hidden = false;
+  $("connect-row").hidden = true;
+  $("st-dev").hidden = false;
   await scan();
 }
 
@@ -242,7 +253,7 @@ function renderDevices() {
   list.replaceChildren();
   for (const d of state.devices) {
     const r = make("input", { type: "radio", name: "dev", checked: d.name === state.selected, ariaLabel: d.name });
-    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; state.events = []; refresh(); });
+    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; state.events = []; state.frozen = null; $("after").hidden = true; refresh(); });
     const stuck = IS_OTA(d.id);
     const parts = [r, make("span", { className: "dname", textContent: d.name }),
       make("span", { className: "meta", textContent: `${d.id.text} ${stuck ? "update mode" : "running"}` })];
@@ -352,9 +363,9 @@ function refresh() {
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (pkg.kind === "other" && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
   $("go").textContent = resume ? "Finish update" : "Install";
-  $("go").disabled = state.busy || !!why;
-  $("why").textContent = state.busy ? "" : why;
+  $("install-row").hidden = !!why || state.busy || state.done;
   $("rescan").disabled = state.busy || !state.up;
+  $("connect-row").hidden = !pkg || !!state.access;
   $("file").disabled = state.busy;
 
   $("restore").hidden = !(state.refusedStartup && pkg && dev && !state.done);
@@ -371,7 +382,6 @@ function refresh() {
 
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
-  $("st-go").dataset.state = state.done ? "done" : state.busy || !why ? "now" : "";
   renderRoute();
   if (!state.busy && !state.done) phase(dev ? `${dev.id.text} on ${dev.name}` : state.access ? "No FM-1 selected" : "");
 }
@@ -380,6 +390,7 @@ async function install(startup = null) {
   const dev = selectedDevice(), pkg = state.pkg;
   if (!dev || !pkg || state.busy) return;
   const resume = IS_OTA(dev.id);
+  state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();
   const up = new Updater(state.access, log);
   up.setPatterns(state.up.patterns);
@@ -420,6 +431,7 @@ async function install(startup = null) {
     if (refusal) note("barrier", "REFUSED", "Step 1: refused by the FM-1's firmware", refusal);
     else if (e.code === "stopped" && e.step === 1) note("barrier", "REFUSED", "Step 1: stopped by the FM-1's firmware", `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written. Which check stopped it is not known for this firmware.`);
     say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? "Stopped: the FM-1's firmware refused the package. Nothing was written. Details on the route above." : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
+    state.frozen = null;
     phase("Stopped"); bar(pct);
   }
   state.busy = false;
