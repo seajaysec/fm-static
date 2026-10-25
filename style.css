@@ -74,9 +74,12 @@ button.small:hover:not(:disabled) { background: var(--ink); color: var(--panel);
 button.x { padding: 0 6px; border: 0; background: none; color: var(--dim); font-size: 1.1rem; }
 button.x:hover:not(:disabled) { background: none; color: var(--stop); }
 
-#drop { border: 2px dashed var(--dim); border-radius: 4px; padding: 20px; text-align: center; background: var(--wash); }
-#drop.over { border-color: var(--orange); background: var(--panel); }
-#drop p { margin: 0 auto 10px; }
+#drop { display: block; border: 2px dashed var(--dim); border-radius: 4px; padding: 22px 20px; text-align: center; background: var(--wash); cursor: pointer; position: relative; }
+#drop:hover, #drop:focus-within, #drop.over { border-color: var(--orange); background: var(--panel); }
+#drop:focus-within { outline: 3px solid var(--orange); outline-offset: 2px; }
+.drop-main { display: block; font: 600 1.1rem var(--head); }
+.drop-sub { display: block; margin-top: 4px; color: var(--dim); font-size: .95rem; overflow-wrap: anywhere; }
+#drop input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 input[type=file] { font: inherit; max-width: 100%; }
 input[type=file]::file-selector-button { font: 600 .95rem var(--head); background: transparent; color: var(--ink); border: 1px solid var(--dim); border-radius: 3px; padding: 6px 12px; margin-right: 10px; cursor: pointer; }
 input[type=checkbox] { accent-color: var(--orange); width: 1.05em; height: 1.05em; vertical-align: -.15em; }

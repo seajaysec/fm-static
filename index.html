@@ -30,10 +30,11 @@
   <section class="stage" id="st-file" data-state="now">
     <h2>Firmware file</h2>
     <p class="lead dim">Any <code>.fwsc</code>. It is read in your browser and goes nowhere else.</p>
-    <div id="drop">
-      <p>Drop a <code>.fwsc</code> file here, or</p>
+    <label id="drop" for="file">
+      <span class="drop-main">Drop a <code>.fwsc</code> file here, or click to choose one</span>
+      <span class="drop-sub" id="drop-name">No file chosen</span>
       <input id="file" type="file" accept=".fwsc" aria-label="Firmware file">
-    </div>
+    </label>
     <div id="fileinfo" hidden>
       <dl>
         <dt>File</dt><dd id="f-name"></dd>

@@ -133,6 +133,7 @@ async function loadFile(file) {
     try {
       const pkg = await inspect(await file.arrayBuffer());
       pkg.name = file.name;
+      $("drop-name").textContent = file.name;
       state.pkg = pkg;
       if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
       $("f-name").textContent = file.name;
@@ -148,6 +149,7 @@ async function loadFile(file) {
       $("fileinfo").hidden = false;
       say("");
     } catch (e) {
+      $("drop-name").textContent = "No file chosen";
       say(`${file.name}: ${e.message}`, "err");
     }
   }
