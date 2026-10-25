@@ -49,29 +49,33 @@ To fix the name itself on a Mac: Audio MIDI Setup, Window, Show MIDI Studio, dou
 
 ## How it gets past a snag
 
-Where the page checks something, what it does when the check fails, and what you are offered. Steps marked "Not tested on
-a device" have not been run on an FM-1.
+Where the page checks something, what it does when the check fails, and what you are offered. Boxes with a dashed outline
+are paths that have not been run on an FM-1 yet.
 
 ```mermaid
 flowchart TD
   A[Choose a .fwsc: drop it, or paste a page or GitHub address] --> B[Read the file: checksums, identity, loader, size]
   B --> C{Checksums match?}
-  C -- no --> C1[Stop: damaged file or not an FM-1 package]
+  C -- no --> C1[Stop: the file is damaged or not an FM-1 package]
   C -- yes --> D[Connect: ask ports with usual FM-1 names who they are]
   D --> E{FM-1 answered?}
   E -- no --> F[List every port: press Try on yours, or add its name]
   F --> G{Answered?}
-  G -- no --> H[Nothing is sent to other ports. Check the cable and other apps using MIDI. Boot mode button: not tested on a device]
-  E -- yes --> I[Device facts: port, running firmware family]
+  G -- no --> H[Nothing is sent to other ports. Suggests: check the cable, close other apps using MIDI, or the boot mode check]
+  E -- yes --> I[Device facts: port and running firmware]
   G -- yes --> I
   I --> J{Right model?}
-  J -- no --> J1[Stop: the only thing refused. Not tested on a device]
+  J -- no --> J1[Stop: a package for another model is the only thing refused]
   J -- yes --> K[Unknown-origin file: confirm a source you trust. Optional: full wipe up to 0xBA000]
-  K --> M[Install. Step 1: the running firmware reads the package]
-  M --> N{Accepted?}
-  N -- yes --> O[Loader writes, FM-1 restarts, identity checked. Done]
-  N -- no --> Q[Nothing written. The page names the check from how many parts were read. 2: size, install V15's size first. 3: loader, pick another package. 4: startup code, restore step, not tested on a device. Other: replug and retry]
-  M --> S[Cut off mid-write: Finish update appears. Not tested on a device]
+  K --> M[Install: the FM-1's own firmware looks at the package first]
+  M --> N{Does it accept it?}
+  N -- yes --> O[The FM-1 writes it and restarts. The page checks it came back as the new firmware. Done]
+  N -- no --> Q[Nothing was written. The page says in plain words which check said no and what to do: install V15 first, or choose another package]
+  Q -- startup code --> R[Restore step: shows the risks, asks for one more file, tries again]
+  M --> S[If the write is cut off, the FM-1 stays in update mode. Reconnect and the Install button reads Finish update: it continues the same install]
+  S --> O
+  classDef notrun stroke-dasharray: 6 4
+  class H,J1,S,R notrun
 ```
 
 ## What has and has not been tested
