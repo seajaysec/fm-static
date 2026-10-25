@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.1";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.1";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.1";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.2";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.2";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.2";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.1";
+const VERSION = "2026-10-25.2";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -15,6 +15,7 @@ const state = {
   pkg: null, access: null, up: null, devices: [], selected: null, busy: false, scanning: false, done: false,
   names: loadNames(),          // port names the user added
   tried: new Map(),            // port -> "no answer" after a manual try
+  events: [],                  // what happened during the install, shown on the route
   refusedStartup: false,       // the running firmware stopped at its startup-code check (see stepOneRefusal)
   donor: null,                 // a Felucca-family package whose startup code answers that check
   known: new Map(),            // Felucca-family packages loaded on this page, by identity: reused as that package
@@ -63,7 +64,9 @@ function shapeText(pkg) {
 // own firmware and the firmwares built on it check is not known.
 const family = (id) => (id.version === 15 ? "v15" : id.version >= 700 ? "app" : "mvave");
 
-// -> [{ state: go | note | stop | detour | info | unknown, plate, title, text }]
+// What was observed before anything is sent: facts only. Nothing here predicts what the FM-1's firmware will do; that
+// is shown when it happens (events, below).
+// -> [{ state: go | info | detour | barrier | idle, plate, title, text }]
 function checks(dev, pkg) {
   const out = [];
   const add = (st, plate, title, text) => out.push({ state: st, plate, title, text });
@@ -77,35 +80,26 @@ function checks(dev, pkg) {
       add("detour", "BYPASSED", `Port “${dev.name}”`, "That is not a usual FM-1 name. An updater that finds the FM-1 by name would have reported it missing. This page found it by asking the port who it is.");
     } else add("go", "CLEAR", `Port “${dev.name}”`, "Answered the FM-1 identity query.");
     if (IS_OTA(dev.id)) {
-      add("note", "NOTE", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish update writes the package to it.`);
+      add("info", "SEEN", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish update writes the package to it.`);
     } else {
       const fam = family(dev.id);
-      if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point the installers we read accept.");
+      if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point every installer we know of accepts.");
       else add("detour", "BYPASSED", `Running ${dev.id.text}`,
         (fam === "app" ? "A Felucca-family firmware. " : "A custom build on M-VAVE's update system. ") +
         "An installer that only starts from official V15 or its own releases would have stopped here. This page does not stop.");
     }
-  }
-  if (dev && pkg && !IS_OTA(dev.id)) {
-    const fam = family(dev.id);
-    if (dev.id.model !== pkg.model) add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
-    else if (fam === "app" && pkg.loader === "official") {
-      add("barrier", "WOULD STOP", "Startup code",
-        `${dev.id.text} installs a package with M-VAVE's loader only if the FM-1's startup code is still official V15's, because that loader would rewrite it. After a rescue that wrote a Felucca-family image the startup code is not V15's, and it refuses. A refusal writes nothing.` +
-        (pkg.flashLen !== APP_END ? ` This package's app area is also larger than V15's, which recent Felucca-family firmwares refuse outright.` : ""));
-    } else if (fam === "mvave" && pkg.loader === "app") {
-      add("note", "NOTE", "Crossing families",
-        `This package's loader writes the app area only (up to ${hex(APP_END)}). Whatever ${dev.id.text} keeps above that stays in flash. Some Felucca-family projects warn that going straight from a custom firmware has bricked an FM-1; the one report is not explained, and this page cannot tell whether it applies to your pair.`);
-    } else if (fam === "app" && pkg.loader === "app") add("go", "CLEAR", "Same family", "A Felucca-family firmware installing a Felucca-family package: the path that loader is built for.");
-    else if (fam === "v15") add("go", "CLEAR", "Path from V15", "The path these packages are built for.");
-    else add("unknown", "UNKNOWN", "Package against the running firmware", `${dev.id.text} is closed. Whether it accepts this package is not known; a refusal writes nothing.`);
+    if (pkg && !IS_OTA(dev.id) && dev.id.model !== pkg.model)
+      add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
   }
   if (!out.length) add("idle", "WAITING", "Nothing to check yet", "Checkpoints appear once there is a firmware file and an FM-1.");
   return out;
 }
 
+// what happens during an install, in order, as it happens
+function note(st, plate, title, text) { state.events.push({ state: st, plate, title, text }); renderRoute(); }
+
 function renderRoute() {
-  $("route").replaceChildren(...checks(selectedDevice(), state.pkg).map((c) => {
+  $("route").replaceChildren(...[...checks(selectedDevice(), state.pkg), ...state.events].map((c) => {
     const li = make("li", { className: "cp" }, make("span", { className: "plate" }, make("span", { textContent: c.plate })),
       make("div", {}, make("b", { textContent: c.title }), make("p", { textContent: c.text })));
     li.dataset.state = c.state;
@@ -117,7 +111,7 @@ function renderRoute() {
 // ota_stage: 2 reads of the UFW header, 1 of the loader's header, then the startup code compared 512 bytes at a time)
 function stepOneRefusal(e, pkg) {
   if (e.code !== "stopped" || e.step !== 1 || !e.from || family(e.from) !== "app") return "";
-  const head = `The firmware on your FM-1 (${e.from.text}) refused the package at request ${e.served}; nothing was written.`;
+  const head = `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written.`;
   if (e.served === 2 && pkg.flashLen !== APP_END)
     return `${head} Its app area is larger than official V15's, which this firmware does not install. Install official V15 first (it installs from here), then this package from V15.`;
   if (e.served === 3) return `${head} It does not accept this package's update loader.`;
@@ -129,7 +123,7 @@ function stepOneRefusal(e, pkg) {
 // ---------------------------------------------------------------- firmware ---
 
 async function loadFile(file) {
-  state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null;
+  state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = [];
   $("fileinfo").hidden = true;
   if (file) {
     try {
@@ -245,7 +239,7 @@ function renderDevices() {
   list.replaceChildren();
   for (const d of state.devices) {
     const r = make("input", { type: "radio", name: "dev", checked: d.name === state.selected, ariaLabel: d.name });
-    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; refresh(); });
+    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; state.events = []; refresh(); });
     const stuck = IS_OTA(d.id);
     const parts = [r, make("span", { className: "dname", textContent: d.name }),
       make("span", { className: "meta", textContent: `${d.id.text} ${stuck ? "update mode" : "running"}` })];
@@ -383,7 +377,7 @@ async function install(startup = null) {
   const dev = selectedDevice(), pkg = state.pkg;
   if (!dev || !pkg || state.busy) return;
   const resume = IS_OTA(dev.id);
-  state.busy = true; state.refusedStartup = false; refresh();
+  state.busy = true; state.refusedStartup = false; state.events = []; refresh();
   const up = new Updater(state.access, log);
   up.setPatterns(state.up.patterns);
   up.select(dev.name);
@@ -391,8 +385,15 @@ async function install(startup = null) {
   const total = Math.max(1, Math.round(pkg.image.length / 512));
   let pct = 0;
   const to = (p, text) => { pct = p; bar(p); phase(text ?? `Writing ${Math.round(p)}%`); };
+  let reads = 0, wrote = false;
   const step = (k, a) => {
     log(`${k} ${a ?? ""}`);
+    if (k === "start") note("info", "STARTED", "Update started", `Asked ${a} to start an update.`);
+    if (k === "verify") reads = a;
+    if (k === "loader") note("go", "ACCEPTED", "Step 1: accepted", `${dev.id.text} read ${reads} parts of the package, found nothing to refuse, and restarted into the update loader.`);
+    if (k === "write" && !wrote) { wrote = true; note("info", "WRITING", "Update loader running", "Writing the package to the FM-1. Do not unplug it."); }
+    if (k === "reboot") note("go", "WRITTEN", "Written", "The package is on the FM-1. Waiting for it to restart.");
+    if (k === "done") note("go", "DONE", "Running the new firmware", `${a}.`);
     if (k === "start") { say(`Starting the update on ${a}. Do not unplug the FM-1.`); to(0, "Starting"); }
     if (k === "verify") { say("Checking the package"); to(Math.min(6, (a / 24) * 6), "Checking the package"); }
     if (k === "loader") { say("Switching to update mode"); to(6, "Update mode"); }
@@ -413,7 +414,9 @@ async function install(startup = null) {
     log(String(e && e.stack || e));
     const refusal = stepOneRefusal(e, pkg);
     state.refusedStartup = !startup && e.served === 4 && pkg.loader === "official" && !!refusal;
-    say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : (refusal || MESSAGES[e.code] || `Error: ${e.message}`), "err");
+    if (refusal) note("barrier", "REFUSED", "Step 1: refused by the FM-1's firmware", refusal);
+    else if (e.code === "stopped" && e.step === 1) note("barrier", "REFUSED", "Step 1: stopped by the FM-1's firmware", `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written. Which check stopped it is not known for this firmware.`);
+    say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? "Stopped: the FM-1's firmware refused the package. Nothing was written. Details on the route above." : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
     phase("Stopped"); bar(pct);
   }
   state.busy = false;
