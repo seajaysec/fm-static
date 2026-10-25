@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.22";
-import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.22";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.22";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.24";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.24";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.24";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.22";
+const VERSION = "2026-10-25.24";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -41,6 +41,7 @@ const MESSAGES = {
 
 const kindText = {
   stock: "official V15, the unmodified M-VAVE firmware",
+  mvave: "looks like one of M-VAVE's own releases (its identity is one of theirs); the page cannot verify who made the file",
   felucca: "contains Felucca's loader marker text (a text match anyone can put in a file, not a signature: this page cannot verify who made it)",
   other: "unknown origin: it carries its own update loader, which this page cannot vouch for",
 };
@@ -55,6 +56,7 @@ const loaderText = {
 // string is in any package inspected, so a name is only ever offered as "the shape of".
 function shapeText(pkg) {
   if (pkg.kind === "stock") return "The official package: its hash is the unmodified M-VAVE V15's.";
+  if (pkg.kind === "mvave") return `The shape of an M-VAVE release (${pkg.product}): M-VAVE's loader and V15's package layout. Only V15's own hash is known to this page.`;
   if (pkg.loader === "official" && pkg.flashLen > APP_END)
     return `Recognised: the shape of a Baudgirl release (M-VAVE's loader, app area up to ${hex(pkg.flashLen)} against V15's ${hex(APP_END)}; true of every one inspected, though the header carries no maker name). `;
   if (pkg.loader === "app")
@@ -66,9 +68,9 @@ function shapeText(pkg) {
 // Step 1 of an update runs in the firmware the FM-1 has now, and that firmware decides whether to accept the package.
 // Firmwares built on Felucca (identity version 700 and up) apply the checks of Felucca's ota.c, read here. What M-VAVE's
 // own firmware and the firmwares built on it check is not known.
-const family = (id) => (id.version === 15 ? "v15" : id.version >= 700 ? "app" : id.version <= 19 ? "official" : "mvave");
+const family = (id) => (id.open ? "open" : id.version === 15 ? "v15" : id.version >= 700 ? "app" : id.version <= 19 ? "official" : "mvave");
 // identity numbers: up to 19 are M-VAVE's own releases, 20..699 builds on M-VAVE's update system, 700 and up Felucca-family
-const familyText = { official: "an official M-VAVE release other than V15", mvave: "a custom build on M-VAVE's update system", app: "a Felucca-family firmware" };
+const familyText = { open: "M-VAVE's Open firmware", official: "an official M-VAVE release other than V15", mvave: "a custom build on M-VAVE's update system", app: "a Felucca-family firmware" };
 
 // What was observed before anything is sent: facts only. Nothing here predicts what the FM-1's firmware will do; that
 // is shown when it happens (events, below).
@@ -97,10 +99,11 @@ function devChecks(dev, pkg) {
     } else {
       const fam = family(dev.id);
       if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point installers expect.");
+      else if (fam === "open") add("info", "SEEN", `Running ${dev.id.text}`, "M-VAVE's Open firmware. Its updater takes only a package it has been told about first: this page tells it the package's SHA-256, and it accepts only M-VAVE's own FM-1 firmware. To install anything else, put M-VAVE's own firmware back first.");
       else add("detour", "BYPASSED", `Running ${dev.id.text}`,
         `${familyText[fam][0].toUpperCase()}${familyText[fam].slice(1)}. An installer that only starts from official V15 or its own releases could have stopped here. This page does not stop.`);
     }
-    if (pkg && pkg.kind === "other" && !$("trust").checked)
+    if (pkg && unverified(pkg) && !$("trust").checked)
       add("idle", "WAITING", "Source not confirmed", "Install appears once you confirm, in the box under the file's checks, that the file comes from a source you trust.");
     if (pkg && !IS_OTA(dev.id) && dev.id.model !== pkg.model)
       add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
@@ -118,6 +121,9 @@ function note(st, plate, title, text) {
 }
 
 const wipeOn = () => $("wipe").checked;
+const bootOn = () => $("bootl").checked;
+// a package whose maker this page cannot vouch for: anything but the official V15 and files with Felucca's marker
+const unverified = (p) => p.kind === "other" || p.kind === "mvave";
 const items = (list) => list.map((c) => {
   const li = make("li", { className: "cp" }, make("span", { className: "plate" }, make("span", { textContent: c.plate })),
     make("div", {}, make("b", { textContent: c.title }), make("p", { textContent: c.text })));
@@ -159,6 +165,7 @@ function stepOneRefusal(e, pkg) {
 async function loadFile(file, source = "") {
   state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; $("after").hidden = true;
   $("wipe").checked = false;   // a full wipe is chosen for one install, never carried over to the next file
+  $("bootl").checked = false; $("backup").checked = false;
   $("fileinfo").hidden = true;
   if (file) {
     try {
@@ -168,16 +175,16 @@ async function loadFile(file, source = "") {
       state.pkg = pkg;
       if (source) provenance(pkg, source);
       if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
-      if (pkg.kind === "stock") state.stock = pkg;
+      if (pkg.kind === "stock" || (pkg.kind === "mvave" && !state.stock)) state.stock = pkg;
       $("f-name").textContent = file.name;
       $("f-source").textContent = source; $("f-source").hidden = $("f-source-t").hidden = !source;
       $("f-id").textContent = pkg.product;
       $("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
       $("f-sha").replaceChildren(...pkg.sha256.match(/.{1,8}/g).map((g) => make("span", { textContent: g })));
       $("f-kind").textContent = kindText[pkg.kind];
-      $("f-kind").className = pkg.kind === "other" ? "warn" : "";
+      $("f-kind").className = unverified(pkg) ? "warn" : "";
       $("f-loader").textContent = loaderText[pkg.loader];
-      $("trust-row").hidden = pkg.kind !== "other";
+      $("trust-row").hidden = !unverified(pkg);
       $("trust").checked = false;
       $("fileinfo").hidden = false;
       say("");
@@ -441,7 +448,7 @@ function renderDevices() {
   list.replaceChildren();
   for (const d of state.devices) {
     const r = make("input", { type: "radio", name: "dev", checked: d.name === state.selected, ariaLabel: d.name });
-    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; state.events = []; state.frozen = null; $("after").hidden = true; refresh(); });
+    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; state.events = []; state.frozen = null; $("after").hidden = true; $("backup").checked = false; refresh(); });
     const stuck = IS_OTA(d.id);
     const parts = [r, make("span", { className: "dname", textContent: d.name }),
       make("span", { className: "meta", textContent: `${d.id.text} ${stuck ? "update mode" : "running"}` })];
@@ -558,12 +565,14 @@ $("stockfile").addEventListener("change", async () => {
   if (!f) return;
   try {
     const d = await inspect(await f.arrayBuffer());
-    if (d.kind === "stock") { d.name = f.name; state.stock = d; $("stock-dialog").close(); }
+    if (d.kind === "stock" || d.kind === "mvave") { d.name = f.name; state.stock = d; $("stock-dialog").close(); }
     else { msg.textContent = `${f.name} is not the official V15 package (its hash is not V15's).`; msg.className = "small err"; msg.hidden = false; }
   } catch (e) { msg.textContent = `${f.name}: ${e.message}`; msg.className = "small err"; msg.hidden = false; }
   refresh();
 });
 $("wipe").addEventListener("change", refresh);
+$("bootl").addEventListener("change", refresh);
+$("backup").addEventListener("change", refresh);
 
 function refresh() {
   const dev = selectedDevice(), pkg = state.pkg;
@@ -574,11 +583,14 @@ function refresh() {
   else if (!state.access) why = "Waiting for your FM-1: press Connect above.";
   else if (!dev) why = "Waiting for an FM-1 to be selected above.";
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
-  else if (pkg.kind === "other" && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
+  else if (unverified(pkg) && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
   $("go").textContent = resume ? "Finish update" : "Install";
-  $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock);
+  $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock) || (!resume && !$("backup").checked);
   const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400;
   $("wipe-row").hidden = !canWipe;
+  const canOpts = !!pkg && !!dev && !resume && !why && !state.busy && !state.done;
+  $("backup-row").hidden = !canOpts;
+  $("boot-row").hidden = !(canOpts && pkg.loader === "app");   // M-VAVE's own firmware has no installer for it
   if (canWipe) {
     $("wipe-info").textContent = state.stock
       ? `Erases every sector from the start of the app area to ${hex(WIPE_END)} and writes ${pkg.product} there, the way a Baudgirl package covers its range. Saved projects and settings that any firmware keeps in that range are lost. M-VAVE's loader also rewrites the FM-1's startup code with V15's. Using ${state.stock.name || "the official V15 package"}.`
@@ -604,6 +616,17 @@ function refresh() {
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
   renderRoute();
+}
+
+// m-bootloader's installer package (vendored, fm1-base's web/m-bootloader): its hash must be the pinned one and it must carry
+// m-bootloader's identity, FM-1_099; it has no flash.bin: the running firmware stages its writer, which rewrites the boot area
+async function bootPackage() {
+  const base = new URL("../vendor/fm1-base/", import.meta.url);
+  const raw = new Uint8Array(await (await fetch(new URL("m-bootloader/fm1-uboot-1.2.fwsc", base))).arrayBuffer());
+  const pin = (await (await fetch(new URL("PIN", base))).text()).split("\n").find((l) => l.startsWith("web/m-bootloader/fm1-uboot-1.2.fwsc "));
+  const got = await sha256hex(raw);
+  if (!pin || pin.split(" ")[1] !== got || productOf(raw) !== "FM-1_099") throw new Error("the bundled m-bootloader package is not the pinned one");
+  return logicalImage(raw);
 }
 
 async function install(startup = null) {
@@ -633,6 +656,9 @@ async function install(startup = null) {
     if (k === "write" && !wrote) { wrote = true; note("info", "WRITING", "Update loader running", "Writing the package to the FM-1. Do not unplug it."); }
     if (k === "reboot") note("go", "WRITTEN", "Written", "The package is on the FM-1. Waiting for it to restart.");
     if (k === "done") note("go", "DONE", "Running the new firmware", `${a}.`);
+    if (k === "bootstart") note("info", "BOOT", "Installing m-bootloader", "The firmware is installed. It now stages m-bootloader's installer and restarts into it.");
+    if (k === "bootwrite") note("info", "WRITING", "m-bootloader", "Writing the boot area. The FM-1 restarts by itself.");
+    if (k === "bootdone") note("go", "DONE", "m-bootloader installed", `The FM-1 runs ${a}. Hold PLAY while switching on for the recovery menu, REC for update mode.`);
     if (k === "start") { say(`Starting the update on ${a}. Do not unplug the FM-1.`); to(0, "Starting"); }
     if (k === "verify") { say("Checking the package"); to(Math.min(6, (a / 24) * 6), "Checking the package"); }
     if (k === "loader") { say("Switching to update mode"); to(6, "Update mode"); }
@@ -646,16 +672,29 @@ async function install(startup = null) {
       if (!done) throw Object.assign(new Error(), { code: "stopped" });
       say(`Done: the FM-1 runs ${pkg.product}.`, "ok");
     } else {
-      const id = await up.install(sent.image, pkg.product, step, startup);
+      const id = await up.install(sent.image, pkg.product, step, { sha256: sent.sha256, startup });
       say(`Done: the FM-1 runs ${id}.`, "ok");
+      if (bootOn() && pkg.loader === "app") {
+        try {
+          say("Installing m-bootloader. The FM-1 restarts by itself.");
+          const bid = await up.installBoot(await bootPackage(), pkg.product, step);
+          say(`Done: the FM-1 runs ${bid}, with m-bootloader.`, "ok");
+        } catch (be) {
+          log(String(be && be.stack || be));
+          if (be.code !== "bootrefused" && be.code !== "lost" && be.code !== "noreturn") throw be;
+          note("barrier", "REFUSED", "m-bootloader", be.code === "bootrefused" ? `${pkg.product} is installed, but m-bootloader could not be: nothing else was changed.` : be.message);
+          say(`Done: the FM-1 runs ${id}. m-bootloader was not installed.`, "ok");
+        }
+      }
     }
   } catch (e) {
     log(String(e && e.stack || e));
     const refusal = stepOneRefusal(e, pkg);
     state.refusedStartup = !startup && e.served === 4 && pkg.loader === "official" && !!refusal;
+    if (e.code === "open") note("barrier", "REFUSED", "M-VAVE's Open firmware", `${e.message} Nothing was sent.`);
     if (refusal) note("barrier", "REFUSED", "Step 1: refused by the FM-1's firmware", refusal);
     else if (e.code === "stopped" && e.step === 1) note("barrier", "REFUSED", "Step 1: stopped by the FM-1's firmware", `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written. Which check stopped it is not known for this firmware.`);
-    say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? "Stopped: the FM-1's firmware refused the package. Nothing was written. Details on the route above." : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
+    say(e.code === "open" ? e.message : e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? "Stopped: the FM-1's firmware refused the package. Nothing was written. Details on the route above." : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
     state.frozen = null;
     progress(null);
   }

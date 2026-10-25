@@ -36,24 +36,9 @@ function enc(buf, off, size, key = 0xFFFF) {
 const u16 = (b, o) => b[o] | (b[o + 1] << 8);
 const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
 
-// the package identity ("FM-1_904"): one marker byte after each of the first 20 blocks
-export function productOf(fwsc) {
-  if (fwsc.length < BLOCKS * BLK) throw new Error("not an FM-1 package (too short)");
-  let s = "";
-  for (let i = 0; i < BLOCKS; i++) {
-    const m = fwsc[i * BLK + KEEP];
-    if (m !== 0x7D) s += String.fromCharCode((m - i - 1) & 0xFF);
-  }
-  return s;
-}
-
-// the image the device addresses during an update: the .fwsc without the 20 marker bytes
-export function logicalImage(fwsc) {
-  const out = new Uint8Array(fwsc.length - BLOCKS);
-  for (let i = 0; i < BLOCKS; i++) out.set(fwsc.subarray(i * BLK, i * BLK + KEEP), i * KEEP);
-  out.set(fwsc.subarray(BLOCKS * BLK), BLOCKS * KEEP);
-  return out;
-}
+// the package identity ("FM-1_904") and the image the device addresses during an update are fm1-base's (vendored, unmodified)
+import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-25.24";
+export { productOf, logicalImage };
 
 // UFW header, entry list and flash.bin CRCs: catches a damaged or wrong file before anything is sent
 export function checkIntegrity(raw) {
@@ -126,7 +111,7 @@ function hasMark(raw) {
   return false;
 }
 
-// -> { product, model, size, sha256, kind: "stock" | "felucca" | "other", loader, flashLen, stockHead, image };
+// -> { product, model, size, sha256, kind: "stock" | "mvave" | "felucca" | "other", loader, flashLen, stockHead, image };
 // throws on a bad file
 export async function inspect(bytes) {
   const raw = new Uint8Array(bytes);
@@ -138,9 +123,13 @@ export async function inspect(bytes) {
   // "stock": the SHA-256 of the unmodified official V15. "felucca": the file contains Felucca's loader marker
   // string; that is a text match anyone can put in a file, NOT a signature, so it is only a hint.
   // Anything else is of unknown origin. The page vouches for nothing but the official hash.
-  const kind = sha256 === STOCK_V15_SHA256 ? "stock" : hasMark(raw) ? "felucca" : "other";
+  const info = await parts(logicalImage(raw));
+  // "mvave": an official-loader package whose identity is one of M-VAVE's own ("FM-1_0" and two digits, 000 to 019; the
+  // numbers above, Baudgirl's 083 and up among them, are other firmwares'): its origin cannot be verified, only its shape
+  const mvave = info.loader === "official" && /^FM-1_0[01]\d$/.test(product);
+  const kind = sha256 === STOCK_V15_SHA256 ? "stock" : mvave ? "mvave" : hasMark(raw) ? "felucca" : "other";
   const image = logicalImage(raw);
-  return { product, model: m[1], size: raw.length, sha256, kind, ...(await parts(image)), image };
+  return { product, model: m[1], size: raw.length, sha256, kind, ...info, image };
 }
 
 // ---------------------------------------------------------------- rebuild ---

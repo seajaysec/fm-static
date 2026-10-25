@@ -1,31 +1,31 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Charles Vestal
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 //
-// Copyright (C) 2026 Chris Farrell (modifications)
-//
-// From Felucca's web/fm1ota.js (https://github.com/hugelton/Felucca).
-// Modified 2026-10-06 by Chris Farrell for fm-static: port discovery (scan, probe, ports, select,
-// setPatterns) and watch(), so that an FM-1 whose MIDI port name changes during an update (the loader
-// has another USB product id; macOS can show a cached name) is still found.
-// Modified 2026-10-24: install() can answer step 1's startup-code comparison with other bytes; a step-1 refusal carries how many requests the firmware made (the page says why it refused).
-//
-// The FM-1 USB-MIDI update protocol over WebMIDI (after tools/fm1_install.py).
-// Step 1: the running firmware (official
-// or Felucca) reads parts of the package and stages the update loader. Step 2:
-// the loader reads the whole image and writes it. Both steps are "the device
-// asks, we answer": cmd 0x30 read requests on the logical image.
+// The FM-1 USB-MIDI update protocol (M-UPGRADE compatible) over WebMIDI.
+// Step 1: the running firmware reads parts of the package and stages the update
+// loader. Step 2: the loader reads the whole image and writes it. In both steps
+// the device sends cmd 0x30 read requests on the logical image and we answer.
 
 const HS_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
 const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 const MAXDATA = 512;
-// port names probed without asking (substrings, any case); any other port only after the user picks it
-export const PRESET_PORTS = ["FM-1", "Felucca", "OTA", "Composite", "SINCO", "USB-MIDI"];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-export const IS_OTA = (id) => /^ota-/i.test(id.model);
+const IS_OTA = (id) => /^ota-/i.test(id.model);
+
+// M-VAVE's FM1 Open firmware (V10, 2026-10): its updater takes only a package it has been told about
+// first (cmd 49 reads its state, cmd 50 arms it with the image length and the package's SHA-256); then
+// the update runs as usual. Only M-VAVE's own FM-1 firmware is installed over it: its loader rewrites the
+// whole flash, boot head included, which returns the FM-1 to stock.
+const OPEN_RE = /^FM1_(OFFICIAL_OPEN|COMMUNITY_\d+)$/;
+// M-VAVE's FM-1 firmware, any version: "FM-1_0" and two digits ("FM-1_016"; fm1-base's dev builds are
+// "FM-1_x00", its releases longer; m-bootloader's installer is FM-1_099). Whether a package is safe to write is the device's to check
+// (felucca-bsp chip/ota.c: a well-made writer, a bootable boot area), not a list of known files
+const IS_STOCK = (product) => /^FM-1_0\d\d$/.test(product) && product !== "FM-1_099";
 
 // errors carry a code the pages translate: notfound, model, stopped, noloader, lost, noreturn,
 // mismatch (detail: the identity the device reports), badreq
-export function fail(code, msg, detail = "") { const e = new Error(msg); e.code = code; e.detail = detail; return e; }
+function fail(code, msg, detail = "") { const e = new Error(msg); e.code = code; e.detail = detail; return e; }
 
 export function pack7(data) {
   const out = []; let acc = 0, nb = 0;
@@ -71,6 +71,7 @@ function parseIdentity(pkt) {
   const d = unpack7(pkt.slice(1, -1));
   if (d.length !== 34 || d[0] !== 0 || d[1] !== 0x59 || d[2] !== 0x11) return null;
   const txt = String.fromCharCode(...d.slice(6, 33)).replace(/\0+$/, "");
+  if (OPEN_RE.test(txt)) return { text: txt, model: "FM-1", version: 0, open: true };
   const m = /^([^_]+)_(\d+)$/.exec(txt);
   return m ? { text: txt, model: m[1], version: parseInt(m[2], 10) } : null;
 }
@@ -118,78 +119,43 @@ async function handshake(link, tries = 3) {
   return null;
 }
 
+function frame(cmd, payload = []) {
+  let s = 0;
+  for (const b of payload) s += b;
+  return [0xF0, ...pack7([0x00, 0x59, cmd, payload.length & 0xFF, payload.length >> 8, 0, ...payload, ~s & 0xFF]), 0xF7];
+}
+
+// send a command -> the payload of its reply, or null
+async function query(link, cmd, payload = []) {
+  link.drain();
+  if (!link.send(frame(cmd, payload))) return null;
+  const end = Date.now() + 1500;
+  while (Date.now() < end) {
+    const p = await link.read(end - Date.now());
+    if (!p) break;
+    if (p[0] !== 0xF0 || p[p.length - 1] !== 0xF7) continue;
+    const u = unpack7(p.slice(1, -1));
+    if (u.length < 7 || u[0] !== 0 || u[1] !== 0x59 || u[2] !== cmd) continue;
+    let s = 0;
+    for (let i = 6; i < u.length; i++) s += u[i];
+    if ((s & 0xFF) === 0xFF) return u.slice(6, 6 + (u[3] | (u[4] << 8)));
+  }
+  return null;
+}
+
 export class Updater {
   constructor(access, log) {
     this.access = access;
     this.log = log || (() => {});
-    this.allowed = new Set();   // ports the user chose although their names are none of the usual ones
-    this.patterns = PRESET_PORTS.slice();   // the user's own names can be added (see setPatterns)
-    this.target = null;
-    this.baseline = null;       // the ports before the update started (see watch())
   }
-
-  inputNames() {
-    return [...new Set([...this.access.inputs.values()].filter((i) => i.state !== "disconnected").map((i) => i.name || ""))];
-  }
-
-  allow(name) { this.allowed.add(name); }
-
-  setPatterns(list) { this.patterns = list.map((x) => String(x).trim()).filter(Boolean); }
-
-  isKnown(name) {
-    const n = (name || "").toLowerCase();
-    return this.patterns.some((p) => n.includes(p.toLowerCase())) || this.allowed.has(name);
-  }
-
-  // the port the user picked: used for the first contact (several FM-1s may be connected);
-  // once the update has started, the renamed ports are followed (see watch())
-  select(name) { this.target = name; if (name) this.allow(name); }
-
-  // every MIDI port that has both an input and an output of the same name
-  ports() {
-    const outs = new Set([...this.access.outputs.values()].filter((o) => o.state !== "disconnected").map((o) => o.name));
-    return this.inputNames().filter((n) => outs.has(n));
-  }
-
-  // ask one port who it is (the FM-1's identity query; harmless to other gear but sent only on request)
-  async probe(name) {
-    const input = [...this.access.inputs.values()].find((i) => i.name === name && i.state !== "disconnected");
-    const output = [...this.access.outputs.values()].find((o) => o.name === name && o.state !== "disconnected");
-    if (!input || !output) return null;
-    try { await input.open(); await output.open(); } catch (_) { return null; }
-    const link = new Link(input, output);
-    const id = await handshake(link, 2);
-    link.close();
-    return id ? { name, id } : null;
-  }
-
-  // probe the ports with a usual FM-1 name; -> [{ name, id }]
-  async scan() {
-    const found = [];
-    for (const name of this.ports()) {
-      if (!this.isKnown(name)) continue;
-      const d = await this.probe(name);
-      if (d) found.push(d);
-    }
-    return found;
-  }
-
-  // remember the ports now: the port name can change when the device restarts. The loader has another
-  // USB product id, and macOS CoreMIDI names a port from its own cache keyed by vendor/product id and USB
-  // location, so a port can carry the name of whatever firmware last used those ids there. After this,
-  // a port that is new also counts.
-  watch() { this.baseline = new Set(this.inputNames()); }
 
   // every in/out pair with the same port name that answers the handshake
   async find(filter) {
     const outs = [...this.access.outputs.values()];
     for (const input of this.access.inputs.values()) {
       if (input.state === "disconnected") continue;
-      const known = this.isKnown(input.name);
-      const fresh = this.baseline && !this.baseline.has(input.name || "");
-      if (!known && !fresh) continue;   // never probe other gear
-      if (!this.baseline && this.target && input.name !== this.target) continue;
-      const output = outs.find((o) => o.name === input.name && o.state !== "disconnected");
+      if (!/fm-?1|felucca|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // never probe other gear
+      const output = outs.find((o) => o.name === input.name) || (outs.length === 1 ? outs[0] : null);
       if (!output) continue;
       try { await input.open(); await output.open(); } catch (_) { continue; }
       const link = new Link(input, output);
@@ -213,7 +179,7 @@ export class Updater {
   // serve read requests until the device asks for one of the finish addresses; stops early
   // when the port disappears (lost: true) instead of waiting out idleMs
   async serve(link, image, finishAddr, idleMs, onProgress) {
-    let served = 0, last = Date.now();
+    let served = 0, bytes = 0, last = Date.now();
     for (;;) {
       const pkt = await link.read(1000);
       if (!pkt) {
@@ -235,35 +201,28 @@ export class Updater {
         return { served, finished: false, lost: true };
       }
       served++;
-      if (onProgress) onProgress(served, r.addr);
+      bytes += r.len;
+      if (onProgress) onProgress(served, bytes);
     }
   }
 
   // full install: running firmware -> loader -> new firmware
-  // startup: optional { at, bytes } (the donor's flash.bin offset and its 16 KiB head). Step 1 then answers the running firmware's comparison of the flash head with these bytes
-  // instead of the package's (the package itself, and step 2, are untouched)
-  async install(image, product, onStep, startup = null) {
+  async install(image, product, onStep, sha256) {
     const step = onStep || (() => {});
     const dev = await this.find((id) => !IS_OTA(id));
     if (!dev) throw fail("notfound", "FM-1 not found (USB cable, and no other app using it?)");
     const [model] = product.split("_");
     if (dev.id.model !== model) { dev.link.close(); throw fail("model", `the device is ${dev.id.text}, the package is for ${product}`); }
+    if (dev.id.open) await this.arm(dev, image, product, sha256);
     step("start", dev.id.text);
-    this.watch();
     dev.link.send(UPGRADE);
     await sleep(2000);
-    let image1 = image;
-    if (startup) { image1 = image.slice(); image1.set(startup.bytes, startup.at); }
-    const s1 = await this.serve(dev.link, image1, 0xE0000000, 8000, (n) => step("verify", n));
+    const s1 = await this.serve(dev.link, image, 0xE0000000, 8000, (n, b) => step("verify", n, b));
     dev.link.close();
-    if (!s1.finished) {
-      // the running firmware refused the package: how far it read says why (app.js stepOneRefusal)
-      const e = fail(s1.lost ? "lost" : "stopped", `the device ${s1.lost ? "was disconnected" : "stopped"} after ${s1.served} requests: nothing was written`);
-      throw Object.assign(e, { step: 1, served: s1.served, from: dev.id });
-    }
+    if (!s1.finished) throw fail(s1.lost ? "lost" : "stopped", `the device ${s1.lost ? "was disconnected" : "stopped"} after ${s1.served} requests: nothing was written`);
     step("loader");
     await sleep(3000);
-    const ota = await this.waitFor((id) => id.model === "ota-" + model, 30000);
+    const ota = await this.waitFor(IS_OTA, 30000);
     if (!ota) throw fail("noloader", "the update loader did not appear. Replug the USB cable and press Install again: the device stays in update mode until it is finished.");
     const s2 = await this.write(ota, image, step);
     if (!s2.finished) throw fail(s2.lost ? "lost" : "stopped", `the loader ${s2.lost ? "was disconnected" : "stopped"} after ${s2.served} requests. Replug and press Install again to resume.`);
@@ -277,33 +236,62 @@ export class Updater {
     return back.id.text;
   }
 
+  // m-bootloader (github.com/jvitkauskas/m-bootloader, MIT) after an install: the running firmware (product)
+  // stages the package's installer (no flash.bin: any well-made writer, felucca-bsp chip/ota.c) and resets; the bootloader
+  // runs it, it rewrites the boot area [0, 0x4000) only and restarts into the firmware. It never talks to us:
+  // we wait for the firmware to come back. A firmware that does not know it refuses it, and nothing is written.
+  async installBoot(image, product, onStep) {
+    const step = onStep || (() => {});
+    const dev = await this.waitFor((id) => !IS_OTA(id) && id.text === product, 40000);
+    if (!dev) throw fail("noreturn", "the device did not come back: power-cycle it");
+    step("bootstart");
+    dev.link.send(UPGRADE);
+    await sleep(2000);
+    const s = await this.serve(dev.link, image, 0xE0000000, 8000);
+    dev.link.close();
+    if (!s.finished) throw fail(s.lost ? "lost" : "bootrefused", `m-bootloader: the device stopped after ${s.served} requests: nothing was written`);
+    step("bootwrite");
+    await sleep(3000);
+    const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+    if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+    back.link.close();
+    step("bootdone", back.id.text);
+    return back.id.text;
+  }
+
+  // M-VAVE's Open firmware: allow the update of M-VAVE's own firmware (sha256: the package file's, hex)
+  async arm(dev, image, product, sha256) {
+    if (!IS_STOCK(product) || !/^[0-9a-f]{64}$/.test(sha256 || "")) {
+      dev.link.close();
+      throw fail("open", `This FM-1 runs M-VAVE's ${dev.id.text} firmware. Put the stock firmware back first ("Back to the stock firmware"), then install this.`, dev.id.text);
+    }
+    const cap = await query(dev.link, 49);
+    if (!cap || cap.length !== 47 || String.fromCharCode(...cap.slice(0, 4)) !== "FMC1" || cap[6] !== 0) {
+      dev.link.close();
+      throw fail("stopped", `${dev.id.text} did not accept the update: nothing was written`);
+    }
+    const n = image.length;
+    const tag = sha256.match(/../g).map((h) => parseInt(h, 16));
+    const ack = await query(dev.link, 50, [1, cap[5], n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF, ...tag]);
+    if (!ack || ack.length !== 1 || ack[0] !== 0) {
+      dev.link.close();
+      throw fail("stopped", `${dev.id.text} refused the package: nothing was written`);
+    }
+  }
+
   // step 2 with the loader found by find()/waitFor()
   async write(ota, image, step) {
     ota.link.send(UPGRADE);
     await sleep(2000);
-    const s2 = await this.serve(ota.link, image, 0xF0000000, 180000, (n) => step("write", n));
+    const s2 = await this.serve(ota.link, image, 0xF0000000, 180000, (n, b) => step("write", n, b));
     ota.link.close();
     return s2;
   }
 
   // resume: the device is already in update mode (loader) -> true when the write finished
-  async resume(image, onStep, product = null) {
-    const model = product && product.split("_")[0];
-    const ota = await this.find((id) => model ? id.model === "ota-" + model : IS_OTA(id));
+  async resume(image, onStep) {
+    const ota = await this.find(IS_OTA);
     if (!ota) return false;
-    const step = onStep || (() => {});
-    this.watch();   // the restarted device may come back under another port name
-    const result = await this.write(ota, image, step);
-    if (!result.finished) return false;
-    if (product) {
-      step("reboot");
-      await sleep(3000);
-      const back = await this.waitFor((id) => id.model === model, 40000);
-      if (!back) throw fail("noreturn", "The FM-1 did not return after resuming the write.");
-      back.link.close();
-      if (back.id.text !== product) throw fail("mismatch", "The FM-1 reports a different firmware after resuming.", back.id.text);
-      step("done", back.id.text);
-    }
-    return true;
+    return (await this.write(ota, image, onStep || (() => {}))).finished;
   }
 }

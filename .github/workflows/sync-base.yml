@@ -1,0 +1,59 @@
+# Brings fm1-base's update protocol, package reader and m-bootloader installer into vendor/fm1-base/ when they change there,
+# as a branch and a pull request to review: nothing reaches the live page without a merge.
+name: Sync fm1-base
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Copy fm1-base's files
+        id: sync
+        run: |
+          set +e
+          tools/sync-base.sh > check.txt 2>&1
+          echo "check=$?" >> "$GITHUB_OUTPUT"
+          cat check.txt
+          if git diff --quiet -- vendor; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Open a pull request
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          commit=$(grep '^commit ' vendor/fm1-base/PIN | cut -d' ' -f2)
+          branch="sync-fm1-base-${commit:0:7}"
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add vendor
+          git commit -m "Sync fm1-base to ${commit:0:7}"
+          git push origin "$branch"
+          {
+            echo "fm1-base moved to \`${commit}\`. Files under \`vendor/fm1-base/\` are copied unmodified; \`src/updater.js\` adapts them."
+            echo
+            echo "What changed upstream: https://github.com/charlesvestal/fm1-base/commits/main"
+            echo
+            if [ "${{ steps.sync.outputs.check }}" = "0" ]; then echo "Compatibility check: passed."; else echo "**Compatibility check failed: the adapter needs changes before this can be merged.**"; fi
+            echo
+            echo '```'
+            cat check.txt
+            echo '```'
+            echo
+            echo "Before merging: run the page against an FM-1 (an install, a refusal, an unusual port name)."
+          } > body.md
+          gh pr create --base main --head "$branch" --title "Sync fm1-base to ${commit:0:7}" --body-file body.md \
+            || gh issue create --title "fm1-base changed: sync branch $branch is ready" --body "Open a pull request from \`$branch\` into \`main\`. The workflow could not (Settings, Actions, General: allow Actions to create pull requests)."

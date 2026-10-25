@@ -47,6 +47,14 @@ Needs Chrome or Edge on a computer (Web MIDI with SysEx). Installing firmware is
 
 To fix the name itself on a Mac: Audio MIDI Setup, Window, Show MIDI Studio, double-click the device.
 
+## Where the update protocol comes from
+
+The update protocol and the package reader are [fm1-base](https://github.com/charlesvestal/fm1-base)'s, copied unmodified into
+`vendor/fm1-base/` (pinned in `vendor/fm1-base/PIN`). `src/updater.js` adds what the page does on top: finding the FM-1 under any
+port name, following the ports through the update loader, the restore step, and what step 1 refused. To take fm1-base's latest:
+`tools/sync-base.sh`. A weekly GitHub job does the same and opens a pull request when anything changed, so fixes arrive for review
+and nothing reaches the page without a merge. `node tools/check-vendor.mjs` checks the copies still offer what the adapter uses.
+
 ## How it gets past a snag
 
 Where the page checks something, what it does when the check fails, and what you are offered. Boxes with a dashed outline
@@ -65,17 +73,19 @@ flowchart TD
   E -- yes --> I[Device facts: port and running firmware]
   G -- yes --> I
   I --> J{Right model?}
+  I -- "running M-VAVE's Open firmware" --> X[The page tells it the package's hash first. It takes only M-VAVE's own firmware: for anything else, put M-VAVE's back first]
   J -- no --> J1[Stop: a package for another model is the only thing refused]
-  J -- yes --> K[Unknown-origin file: confirm a source you trust. Optional: full wipe up to 0xBA000]
+  J -- yes --> K[Back up first. Unknown-origin file: confirm a source you trust. Optional: full wipe up to 0xBA000]
   K --> M[Install: the FM-1's own firmware looks at the package first]
   M --> N{Does it accept it?}
   N -- yes --> O[The FM-1 writes it and restarts. The page checks it came back as the new firmware. Done]
   N -- no --> Q[Nothing was written. The page says in plain words which check said no and what to do: install V15 first, or choose another package]
   Q -- startup code --> R[Restore step: shows the risks, asks for one more file, tries again]
+  O -- if ticked --> W[Then m-bootloader: the FM-1 restarts once more. Hold PLAY at power-on for a recovery menu, REC for update mode]
   M --> S[If the write is cut off, the FM-1 stays in update mode. Reconnect and the Install button reads Finish update: it continues the same install]
   S --> O
   classDef notrun stroke-dasharray: 6 4
-  class H,J1,S,R notrun
+  class H,J1,S,R,X,W notrun
 ```
 
 ## What has and has not been tested
