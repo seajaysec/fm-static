@@ -37,7 +37,7 @@ const u16 = (b, o) => b[o] | (b[o + 1] << 8);
 const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
 
 // the package identity ("FM-1_904") and the image the device addresses during an update are fm1-base's (vendored, unmodified)
-import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-25.26";
+import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-25.29";
 export { productOf, logicalImage };
 
 // UFW header, entry list and flash.bin CRCs: catches a damaged or wrong file before anything is sent

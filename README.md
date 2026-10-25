@@ -85,7 +85,7 @@ flowchart TD
   M --> S[If the write is cut off, the FM-1 stays in update mode. Reconnect and the Install button reads Finish update: it continues the same install]
   S --> O
   classDef notrun stroke-dasharray: 6 4
-  class H,J1,S,R,X notrun
+  class H,J1,S,R notrun
 ```
 
 ## What has and has not been tested
@@ -94,10 +94,10 @@ Run on a real FM-1 (macOS, Chrome): installs in every direction between official
 Felucca-family firmwares and Mutable Dreams, with and without the full wipe; a real refusal by a newer Felucca and the way
 round it; installing m-bootloader after a firmware and then putting M-VAVE's V16 back over it; a package found through a
 GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
-update loader); another app holding the MIDI ports during an install.
+update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page.
 
 Not tested on a device: finishing an interrupted update, the startup-code refusal and the restore step, boot-mode
-detection, the wrong-model refusal, M-VAVE's Open firmware, m-bootloader's recovery menu and update-mode keys. Out of scope:
+detection, the wrong-model refusal, m-bootloader's recovery menu and update-mode keys. Out of scope:
 how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 
 ## Lineage and licence
