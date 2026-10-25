@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.11";
-import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.11";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.11";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.12";
+import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.12";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.12";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.11";
+const VERSION = "2026-10-25.12";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -213,6 +213,7 @@ $("url-form").addEventListener("submit", async (ev) => {
   if (raw && !/^[a-z][a-z0-9+.-]*:/i.test(raw) && /\./.test(raw)) raw = "https://" + raw;   // "example.com/page" works too
   try { page = new URL(raw); if (!/^https?:$/.test(page.protocol)) throw 0; } catch (_) { urlMsg("That is not a web address. Paste the page's address, for example https://example.com/installer.", "small err"); return; }
   if (/\.fwsc$/i.test(page.pathname)) { await useUrl(page); return; }
+  if (page.hostname === "github.com" || page.hostname === "www.github.com") { await githubRepo(page); return; }
   urlMsg(`Reading ${page.host}…`);
   let text;
   try {
@@ -234,6 +235,46 @@ $("url-form").addEventListener("submit", async (ev) => {
   showList([...found.values()]);
 });
 
+// ------------------------------------------------------------ GitHub repos ---
+// github.com's own pages cannot be read by other pages, but its API and raw file host can. A repo's committed .fwsc
+// files (default branch and gh-pages) load directly. Release downloads cannot be read by a web page (GitHub redirects
+// them to a host that does not allow it), so those are listed with a link to download them and drop them above.
+// The API allows 60 anonymous requests an hour per address; a lookup uses about five.
+async function githubRepo(page) {
+  const [owner, repo] = page.pathname.split("/").filter(Boolean);
+  if (!owner || !repo) { urlMsg("That GitHub address has no repository in it. Use https://github.com/owner/repo.", "small err"); return; }
+  const api = async (path) => {
+    const r = await fetch(`https://api.github.com/repos/${owner}/${repo.replace(/\.git$/, "")}${path}`);
+    if (r.status === 403 || r.status === 429) throw new Error("GitHub's limit for anonymous lookups was reached; try again in an hour, or paste the address of a file in the repo");
+    if (r.status === 404) throw new Error("no such repository, or it is private");
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`.trim());
+    return r.json();
+  };
+  urlMsg(`Reading ${owner}/${repo} on GitHub…`);
+  try {
+    const info = await api("");
+    const branches = (await api("/branches?per_page=100")).map((b) => b.name);
+    const want = [...new Set([info.default_branch, ...branches.filter((b) => b === "gh-pages")])];
+    const found = new Map();                       // address -> URL, for files that can be loaded
+    let truncated = false;
+    for (const br of want) {
+      const tree = await api(`/git/trees/${encodeURIComponent(br)}?recursive=1`);
+      if (tree.truncated) truncated = true;
+      for (const e of tree.tree) if (e.type === "blob" && /\.fwsc$/i.test(e.path)) {
+        const u = new URL(`https://raw.githubusercontent.com/${owner}/${info.name}/${encodeURIComponent(br)}/${e.path.split("/").map(encodeURIComponent).join("/")}`);
+        found.set(u.href, u);
+      }
+    }
+    const loadable = new Set([...found.values()].map((u) => decodeURIComponent(u.pathname.split("/").pop()).toLowerCase()));
+    const rel = (await api("/releases?per_page=30")).flatMap((r) => r.assets.filter((a) => /\.fwsc$/i.test(a.name)).map((a) => ({ name: a.name, tag: r.tag_name, href: a.browser_download_url })))
+      .filter((a) => !loadable.has(a.name.toLowerCase()));
+    if (!found.size && !rel.length) { urlMsg(`No .fwsc files in ${owner}/${repo}: not committed on ${want.join(" or ")}, and none attached to a release. Its firmware may need building from source, which this page cannot do.`, "small err"); return; }
+    if (found.size === 1 && !rel.length) { await useUrl([...found.values()][0]); return; }
+    showList([...found.values()], rel);
+    if (truncated) urlMsg($("url-msg").textContent + " (GitHub cut the file list short for a very large repo.)");
+  } catch (e) { urlMsg(e instanceof TypeError ? blocked : `Could not read that repository: ${e.message}.`, "small err"); }
+}
+
 // the version in a file name: dotted numbers (v0.9.17) if there are any, else the last short number (FM-1+VA-102).
 // Names with none sort last.
 const versionOf = (u) => {
@@ -251,19 +292,22 @@ const byVersion = (x, y) => {
 };
 const byName = (x, y) => decodeURIComponent(x.pathname).localeCompare(decodeURIComponent(y.pathname), undefined, { numeric: true });
 
-function showList(urls) {
+function showList(urls, downloadOnly = []) {
   const sel = make("select", { id: "url-sort", ariaLabel: "Sort the files" },
     make("option", { value: "version", textContent: "Newest first, by the version in the name" }),
     make("option", { value: "name", textContent: "A to Z" }));
   const row = make("li", { className: "sortrow" }, sel);
+  const only = downloadOnly.map((a) => make("li", {}, make("span", { className: "dname", textContent: a.name }),
+    make("span", { className: "meta", textContent: `release ${a.tag}: GitHub only lets you download this one yourself, then drop it in the box above` }),
+    make("a", { href: a.href, target: "_blank", rel: "noopener", textContent: "Download", className: "dl" })));
   const draw = () => $("url-results").replaceChildren(row, ...[...urls].sort(sel.value === "name" ? byName : byVersion).map((u) => {
     const b = make("button", { className: "small", type: "button", textContent: "Use this file" });
     b.addEventListener("click", () => useUrl(u));
     return make("li", {}, make("span", { className: "dname", textContent: decodeURIComponent(u.pathname.split("/").pop()) }), make("span", { className: "meta", textContent: u.host + u.pathname.replace(/[^/]*$/, "") }), b);
-  }));
+  }), ...only);
   sel.addEventListener("change", draw);
   draw();
-  urlMsg(`${urls.length} firmware files appear in that page. Pick one:`);
+  urlMsg(urls.length ? `${urls.length + downloadOnly.length} firmware files found. Pick one:` : `${downloadOnly.length} firmware files found, none that a web page can read. Download one and drop it in the box above:`);
 }
 const drop = $("drop");
 for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });

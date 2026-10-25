@@ -170,3 +170,6 @@ dialog h3 { margin-top: 0; }
 
 #url-results .sortrow { display: block; border-bottom: 0; padding-bottom: 0; }
 #url-sort { font: inherit; font-size: .95rem; background: var(--wash); color: var(--ink); border: 1px solid var(--dim); border-radius: 3px; padding: 5px 8px; }
+
+#url-results .dl { font: 500 .95rem var(--head); border: 1px solid var(--dim); border-radius: 3px; padding: 5px 12px; text-decoration: none; color: var(--ink); }
+#url-results .dl:hover { background: var(--ink); color: var(--panel); }
