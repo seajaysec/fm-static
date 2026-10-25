@@ -159,3 +159,5 @@ footer { margin-top: 40px; max-width: 54ch; }
 dialog { max-width: min(520px, calc(100vw - 32px)); padding: 20px 22px 6px; background: var(--panel); color: var(--ink); border: 2px solid var(--ink); border-radius: 0; }
 dialog::backdrop { background: rgba(14, 15, 17, .6); }
 dialog h3 { margin-top: 0; }
+
+.ver { display: block; margin-top: 8px; font-family: var(--mono); font-size: .85rem; }

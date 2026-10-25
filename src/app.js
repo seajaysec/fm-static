@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js";
-import { inspect, APP_END } from "./fm1pkg.js";
-import { loadNames, saveNames } from "./ports.js";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.1";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.1";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.1";
 
+// the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
+const VERSION = "2026-10-25.1";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -429,3 +431,8 @@ $("restore-go").addEventListener("click", () => {
   if (src && $("risk").checked) install({ at: state.pkg.flashOff, bytes: src.d.startup });
 });
 refresh();
+
+if ($("ver-page").textContent !== VERSION) {
+  $("ver-script").textContent = ` — but its script is ${VERSION}: an old copy is cached. Reload with Cmd/Ctrl+Shift+R.`;
+  $("ver-script").className = "warn";
+}
