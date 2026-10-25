@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.21";
-import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.21";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.21";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.22";
+import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.22";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.22";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.21";
+const VERSION = "2026-10-25.22";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -150,7 +150,7 @@ function stepOneRefusal(e, pkg) {
     return `${head} In Felucca's code that is the check that the package's flash.bin is exactly V15's size (this one's is ${hex(pkg.flashLen)}). Some Felucca-family builds do not make that check. A package of V15's size gets past it, though it can still be stopped at the startup-code check.`;
   if (e.served === 3) return `${head} It does not accept this package's update loader.`;
   if (e.served === 4 && pkg.loader === "official")
-    return `${head} That is its comparison of the startup code in your FM-1's flash with the package's, which is official V15's: the two differ. This page cannot see why (a full-flash rescue with a Felucca-family image is one way). Because the package's loader rewrites that region, the firmware refuses. The restore mode below can answer that check.`;
+    return `${head} It looked at the package's startup code (the first 16 KB of its flash image) and would not take it. An older Felucca-family firmware refuses when that differs from the startup code on your FM-1, which is the case after a rescue that wrote another firmware's image, or with a replacement boot loader such as m-bootloader. A firmware built on a recent fm1-base accepts any startup code the chip can start from, so installing one of those first is the other way through. The restore step below answers the older kind of check.`;
   return "";
 }
 
