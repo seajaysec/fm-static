@@ -17,4 +17,7 @@ licence.
 No firmware is included. A .fwsc file chosen on the page is read in the browser and sent only to
 the FM-1 over USB.
 
+Fonts: Barlow and Barlow Semi Condensed, Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow), SIL Open
+Font License 1.1; the files are in fonts/ with fonts/OFL.txt.
+
 M-VAVE and FM-1 are names of their owners; fm-static is not affiliated with M-VAVE or with Felucca.

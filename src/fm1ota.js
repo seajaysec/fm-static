@@ -7,7 +7,7 @@
 // Modified 2026-10-06 by Chris Farrell for fm-static: port discovery (scan, probe, ports, select,
 // setPatterns) and watch(), so that an FM-1 whose MIDI port name changes during an update (the loader
 // has another USB product id; macOS can show a cached name) is still found.
-// Modified 2026-10-24: a step-1 refusal carries how many requests the firmware made (the page says why it refused).
+// Modified 2026-10-24: install() can answer step 1's startup-code comparison with other bytes; a step-1 refusal carries how many requests the firmware made (the page says why it refused).
 //
 // The FM-1 USB-MIDI update protocol over WebMIDI (after tools/fm1_install.py).
 // Step 1: the running firmware (official
@@ -240,7 +240,9 @@ export class Updater {
   }
 
   // full install: running firmware -> loader -> new firmware
-  async install(image, product, onStep) {
+  // startup: optional { at, bytes } (the donor's flash.bin offset and its 16 KiB head). Step 1 then answers the running firmware's comparison of the flash head with these bytes
+  // instead of the package's (the package itself, and step 2, are untouched)
+  async install(image, product, onStep, startup = null) {
     const step = onStep || (() => {});
     const dev = await this.find((id) => !IS_OTA(id));
     if (!dev) throw fail("notfound", "FM-1 not found (USB cable, and no other app using it?)");
@@ -250,7 +252,9 @@ export class Updater {
     this.watch();
     dev.link.send(UPGRADE);
     await sleep(2000);
-    const s1 = await this.serve(dev.link, image, 0xE0000000, 8000, (n) => step("verify", n));
+    let image1 = image;
+    if (startup) { image1 = image.slice(); image1.set(startup.bytes, startup.at); }
+    const s1 = await this.serve(dev.link, image1, 0xE0000000, 8000, (n) => step("verify", n));
     dev.link.close();
     if (!s1.finished) {
       // the running firmware refused the package: how far it read says why (app.js stepOneRefusal)

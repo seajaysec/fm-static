@@ -25,10 +25,13 @@ If your firmware's own updater, or M-VAVE's, works for you, use that instead.
 - During an install, follows the FM-1 as its port changes when it restarts into the update loader
   and back.
 - If an update was cut off and the FM-1 is still in update mode, offers **Finish update**.
-- Shows which update loader a package carries (M-VAVE's, which rewrites the FM-1's startup code, or an
-  app-area-only one as in Felucca) and notes when the firmware the FM-1 runs now may refuse it. If a
-  Felucca-based firmware refuses a package, it says why (app area size, loader, or startup code).
-  It installs over any firmware; it never refuses on the running firmware's account.
+- Installs over any firmware: it never refuses because of what the FM-1 runs now (only a wrong model). It reads the
+  package (which update loader it carries, flash.bin size, whether its startup code is official V15's) and lists what it
+  saw as checkpoints, including what an installer that only starts from V15 would have stopped on.
+- If a Felucca-family firmware refuses a package, it says which check refused (app area size, loader, or startup code).
+  For the startup-code refusal there is an opt-in **Restore official startup code** mode: it answers that check with the
+  startup code of a Felucca-family file you pick, then M-VAVE's loader writes the package. It rewrites the region a
+  failed write can leave unbootable, and has not been run on a device; the page lists the risks and why.
 
 Needs Chrome or Edge on a computer (Web MIDI with SysEx). Installing firmware is at your own risk.
 

@@ -5,7 +5,8 @@
 // From Felucca's web/fm1pkg.js (https://github.com/hugelton/Felucca).
 // Modified 2026-10-06 by Chris Farrell for fm-static: reduced to reading a package
 // (identity, CRC check, origin hint, logical image); the package building code is removed.
-// Modified 2026-10-24: the package's update parts (which loader, flash.bin's size, whether the head is official V15's).
+// Modified 2026-10-24: the package's update parts (which loader, flash.bin's size and place, its startup code, whether
+// that is official V15's).
 //
 // Reading an FM-1 .fwsc in the browser: its identity, an integrity check, and the image the
 // device addresses during an update. Nothing is modified.
@@ -103,7 +104,10 @@ async function parts(lg) {
     else if (hasMark(b.subarray(0x48))) loader = "app";
   }
   const head = fl && fl.off + HEAD_LEN <= lg.length ? await sha256hex(lg.subarray(fl.off, fl.off + HEAD_LEN)) : "";
-  return { loader, flashLen: fl ? fl.len : 0, stockHead: head === STOCK_HEAD_SHA256 };
+  const flashOff = fl ? fl.off : 0;
+  // the startup code as this package carries it: the bytes a running firmware compares in step 1
+  const startup = flashOff && flashOff + HEAD_LEN <= lg.length ? lg.slice(flashOff, flashOff + HEAD_LEN) : null;
+  return { loader, flashLen: fl ? fl.len : 0, flashOff, startup, stockHead: head === STOCK_HEAD_SHA256 };
 }
 
 export async function sha256hex(bytes) {

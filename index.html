@@ -6,39 +6,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=VT323&display=swap">
+<meta name="description" content="Install any FM-1 .fwsc firmware, whatever the FM-1 runs now, and see what other installers would have stopped on.">
 <link rel="stylesheet" href="style.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d1a21'/%3E%3Cpath d='M2 16c3-12 5-12 7 0s4 12 7 0 5-12 7 0 3 12 7 0' fill='none' stroke='%234fe8d0' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
-<main>
-  <header>
-    <div class="mark"><h1>fm-static</h1><p class="tag">Update an FM-1 the other updaters can't find.</p></div>
-    <div class="crt"><canvas id="scope" aria-hidden="true"></canvas><div id="lcd" role="status">waiting</div></div>
-  </header>
+<header class="band">
+  <div class="wrap">
+    <h1>fm-static</h1>
+    <p class="tag">Install the firmware you picked. Whatever your FM-1 runs now.</p>
+  </div>
+</header>
+<div class="hazard" aria-hidden="true"></div>
 
-  <p class="about">For an M-VAVE FM-1 whose MIDI port has another name on your computer, whether you
-    renamed it or something else did. On a Mac, Audio MIDI Setup can keep the name of a different device
-    last plugged into the same USB socket. Updaters that look for the FM-1 by name then can't find it.
-    This page lists every port and lets you pick yours. If your firmware's own updater works, use that.</p>
+<main class="wrap">
+  <section class="why" aria-labelledby="why-h">
+    <h2 id="why-h">Installers stop where their own firmware ends.</h2>
+    <p>Two FM-1 installers we read only install over official V15 or their own releases. This page looks at the file and the
+      device instead, installs, and says what it saw on the way, including what would have stopped you. Maybe it would have
+      worked anyway; then it says that too.</p>
+    <details>
+      <summary>What those two installers say</summary>
+      <p class="small">JIANT's installer: "It checks the FM-1 first and writes only over official V15 or JIANT", because
+        "writing it straight over another custom firmware has bricked an FM-1" (one report, not explained).
+        <a href="https://github.com/juanjiant-bit/JIANT#installing-at-your-own-risk">README, Installing</a>.
+        Baudgirl's installer: "I have only tested the installer on M-VAVE's firmware V15 and on my own releases", then asks
+        you to update to V15 first. <a href="https://baudgirl.com/work/FM-1+VA/install">Install page</a> (the sentence is in
+        its script). Both are testing and support scope. Neither says the FM-1 can't take the file.</p>
+    </details>
+  </section>
 
   <section class="stage" id="st-file" data-state="now">
-    <h2>Firmware</h2>
-    <p class="lead dim">Any <code>.fwsc</code> file. It is read in your browser and goes nowhere else. Flashing is at your own risk: if the FM-1 stays in update mode, replug it and press <b>Finish update</b>.</p>
+    <h2>Firmware file</h2>
+    <p class="lead dim">Any <code>.fwsc</code>. It is read in your browser and goes nowhere else.</p>
     <div id="drop">
       <p>Drop a <code>.fwsc</code> file here, or</p>
-      <input id="file" type="file" accept=".fwsc">
+      <input id="file" type="file" accept=".fwsc" aria-label="Firmware file">
     </div>
     <div id="fileinfo" hidden>
       <dl>
         <dt>File</dt><dd id="f-name"></dd>
         <dt>Identity</dt><dd id="f-id"></dd>
         <dt>Size</dt><dd id="f-size"></dd>
-        <dt>SHA-256</dt><dd id="f-sha"></dd>
+        <dt>SHA-256</dt><dd id="f-sha" class="mono hash"></dd>
         <dt>Origin</dt><dd id="f-kind"></dd>
         <dt>Loader</dt><dd id="f-loader"></dd>
+        <dt>Shape</dt><dd id="f-shape"></dd>
       </dl>
       <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from someone I trust and accept the risk of installing it.</label></p>
     </div>
@@ -49,10 +62,10 @@
     <p id="connect-row"><button id="connect">Connect</button></p>
     <div id="devices" hidden>
       <div id="device-list"></div>
-      <p id="none" class="dim" hidden>Nothing answered under a known port name. Pick your FM-1 in the port list below.</p>
+      <p id="none" class="dim" hidden>Nothing answered under a usual FM-1 port name. Pick your FM-1 in the port list below.</p>
 
       <h3>MIDI ports</h3>
-      <p class="small">Every port your computer sees. Only a port you press <b>Try</b> on is sent anything. On a Mac a port can keep the name of another device last plugged into that USB socket; rename it in Audio MIDI Setup (Window, Show MIDI Studio).</p>
+      <p class="small">Every port your computer sees. Only a port you press <b>Try</b> on is sent anything. On a Mac a port can keep the name of another device last plugged into that USB socket (Audio MIDI Setup, Window, Show MIDI Studio, renames it).</p>
       <ul id="ports" class="plain"></ul>
       <p id="ports-empty" class="small dim" hidden>No other ports. If your FM-1 is missing, check the USB cable: it must carry data.</p>
 
@@ -61,22 +74,65 @@
         <p class="small">A port with one of these in its name is found automatically. Add the name your FM-1 shows up under; it is kept in this browser.</p>
         <ul id="presets" class="chips" aria-label="Built-in names"></ul>
         <ul id="custom" class="chips" aria-label="Your names"></ul>
-        <form id="add-name"><input id="new-name" placeholder="e.g. the name your FM-1 shows up under" aria-label="New port name"><button class="small" type="submit">Add name</button></form>
+        <form id="add-name"><input id="new-name" placeholder="the name your FM-1 shows up under" aria-label="New port name"><button class="small" type="submit">Add name</button></form>
       </details>
-      <p style="margin-top:14px"><button id="rescan" class="small">Rescan</button></p>
+      <p class="after"><button id="rescan" class="small">Rescan</button></p>
     </div>
+  </section>
+
+  <section class="stage" id="st-route">
+    <h2>The route</h2>
+    <p class="lead dim">What this page saw, before it sends anything. Nothing here blocks an install except a wrong model.</p>
+    <ol id="route" class="route">
+      <li class="cp" data-state="idle"><span class="plate">WAITING</span><div><b>Choose a file and connect your FM-1</b><p>The checkpoints appear here.</p></div></li>
+    </ol>
   </section>
 
   <section class="stage" id="st-go">
     <h2>Install</h2>
-    <p id="path" class="small warn" hidden></p>
-    <p><button id="go" disabled>Install</button> <span id="why" class="small"></span></p>
-    <div id="bar" aria-hidden="true"></div>
+    <p class="installrow"><button id="go" disabled>Install</button> <span id="why" class="small"></span></p>
+    <div id="road" aria-hidden="true"><i id="road-fill"></i></div>
+    <p id="phase" class="small dim" role="status"></p>
     <p id="status" role="status"></p>
+
+    <div id="restore" class="restore" hidden>
+      <h3>Restore official startup code</h3>
+      <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
+        startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
+        loader writes the package, its own startup code included.</p>
+      <div class="risk">
+        <h4>This part carries real risk. Here is what, and why.</h4>
+        <ul>
+          <li><b>It rewrites the one region a failed write can leave unbootable.</b> The first 16 KB of flash holds the
+            code that starts the update loader. Felucca's own loader leaves it alone. If power or USB drops while it is being
+            rewritten, the FM-1 may not start.</li>
+          <li><b>It should be recoverable, but not from this page.</b> The chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057)
+            does not depend on that flash, so the FM-1 can in principle be written again from there. JIANT's manual
+            describes this and, as a last resort, an RP2040 board
+            (<a href="https://github.com/juanjiant-bit/JIANT/blob/main/docs/MANUAL.md">manual</a>). That recovery is not
+            tested here.</li>
+          <li><b>Not tested on a device.</b> M-VAVE's updater rewrites that region on every update with the same bytes.
+            Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca's
+            and JIANT's step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
+            inside it can't be ruled out.</li>
+          <li id="risk-data" hidden><b>This package can overwrite saved data.</b> Its flash.bin is larger than V15's, so the
+            loader also overwrites flash above 0x93000, where Felucca-family firmwares keep saved projects. V15 itself stops
+            at 0x93000 and leaves them.</li>
+          <li><b>It can also do nothing.</b> If the file you pick does not carry the startup code that is on your FM-1, the
+            firmware refuses again and nothing is written.</li>
+        </ul>
+        <p class="small">Lower the odds: USB straight into the computer, laptop on power, this tab in front the whole time. If
+          the write is cut off while the FM-1 is in update mode, replug it and press Finish update.</p>
+      </div>
+      <p><label class="filelabel">Felucca-family package for the startup code <input id="donor" type="file" accept=".fwsc"></label></p>
+      <p id="donor-info" class="small" hidden></p>
+      <p class="trust"><label><input id="risk" type="checkbox"> I understand this can leave my FM-1 needing a boot-mode rescue<span id="risk-more"></span>.</label></p>
+      <p><button id="restore-go" disabled>Restore startup code and install</button></p>
+    </div>
     <details><summary>Log</summary><pre id="log"></pre></details>
   </section>
 
-  <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE.</footer>
+  <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.</footer>
 </main>
 <script type="module" src="src/app.js"></script>
 </body>
