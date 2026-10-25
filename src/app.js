@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.6";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.6";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.6";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.7";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.7";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.7";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.6";
+const VERSION = "2026-10-25.7";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -225,13 +225,40 @@ $("url-form").addEventListener("submit", async (ev) => {
   }));
   if (!found.size) { urlMsg(`No .fwsc files appear in that page's source. Pages that build their list with a separate script are not followed; download the file and drop it above.`, "small err"); return; }
   if (found.size === 1) { await useUrl([...found.values()][0]); return; }
-  urlMsg(`${found.size} firmware files appear in that page. Pick one:`);
-  $("url-results").replaceChildren(...[...found.values()].map((u) => {
+  showList([...found.values()]);
+});
+
+// the version in a file name: dotted numbers (v0.9.17) if there are any, else the last short number (FM-1+VA-102).
+// Names with none sort last.
+const versionOf = (u) => {
+  const n = decodeURIComponent(u.pathname.split("/").pop());
+  const dotted = n.match(/\d+(?:\.\d+)+/);
+  if (dotted) return dotted[0].split(".").map(Number);
+  const runs = n.match(/\d{1,4}(?![\da-f])/g);
+  return runs ? [Number(runs[runs.length - 1])] : null;
+};
+const byVersion = (x, y) => {
+  const a = versionOf(x), b = versionOf(y);
+  if (!a || !b) return a ? -1 : b ? 1 : 0;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (b[i] ?? 0) - (a[i] ?? 0);
+  return 0;
+};
+const byName = (x, y) => decodeURIComponent(x.pathname).localeCompare(decodeURIComponent(y.pathname), undefined, { numeric: true });
+
+function showList(urls) {
+  const sel = make("select", { id: "url-sort", ariaLabel: "Sort the files" },
+    make("option", { value: "version", textContent: "Newest first, by the version in the name" }),
+    make("option", { value: "name", textContent: "A to Z" }));
+  const row = make("li", { className: "sortrow" }, sel);
+  const draw = () => $("url-results").replaceChildren(row, ...[...urls].sort(sel.value === "name" ? byName : byVersion).map((u) => {
     const b = make("button", { className: "small", type: "button", textContent: "Use this file" });
     b.addEventListener("click", () => useUrl(u));
     return make("li", {}, make("span", { className: "dname", textContent: decodeURIComponent(u.pathname.split("/").pop()) }), make("span", { className: "meta", textContent: u.host + u.pathname.replace(/[^/]*$/, "") }), b);
   }));
-});
+  sel.addEventListener("change", draw);
+  draw();
+  urlMsg(`${urls.length} firmware files appear in that page. Pick one:`);
+}
 const drop = $("drop");
 for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
 for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });

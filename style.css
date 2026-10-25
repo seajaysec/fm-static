@@ -167,3 +167,6 @@ dialog h3 { margin-top: 0; }
 .urlrow { display: flex; gap: 8px; flex-wrap: wrap; }
 .urlrow input { flex: 1 1 18rem; min-width: 0; font: inherit; background: var(--wash); color: var(--ink); border: 1px solid var(--dim); border-radius: 3px; padding: 7px 10px; }
 #url-results .meta { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+
+#url-results .sortrow { display: block; border-bottom: 0; padding-bottom: 0; }
+#url-sort { font: inherit; font-size: .95rem; background: var(--wash); color: var(--ink); border: 1px solid var(--dim); border-radius: 3px; padding: 5px 8px; }
