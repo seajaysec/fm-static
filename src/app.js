@@ -48,9 +48,9 @@ const loaderText = {
 function shapeText(pkg) {
   if (pkg.kind === "stock") return "The official package: its hash is the unmodified M-VAVE V15's.";
   if (pkg.loader === "official" && pkg.flashLen > APP_END)
-    return `The shape of Baudgirl's releases (all that were inspected): M-VAVE's loader and an app area up to ${hex(pkg.flashLen)}, larger than V15's ${hex(APP_END)}. `;
+    return `Recognised: the shape of a Baudgirl release (M-VAVE's loader, app area up to ${hex(pkg.flashLen)} against V15's ${hex(APP_END)}; true of every one inspected, though the header carries no maker name). `;
   if (pkg.loader === "app")
-    return "A Felucca-family package. Felucca, JIANT, SLOOP, X0X and others share this structure, so the file cannot say which one it is.";
+    return "A Felucca-family package. Several firmwares share this structure, so the file cannot say which one it is.";
   return "No known shape.";
 }
 

@@ -22,18 +22,9 @@
 <main class="wrap">
   <section class="why" aria-labelledby="why-h">
     <h2 id="why-h">Installers stop where their own firmware ends.</h2>
-    <p>Two FM-1 installers we read only install over official V15 or their own releases. This page looks at the file and the
+    <p>Some FM-1 installers only install over official V15 or their own releases. This page looks at the file and the
       device instead, installs, and says what it saw on the way, including what would have stopped you. Maybe it would have
       worked anyway; then it says that too.</p>
-    <details>
-      <summary>What those two installers say</summary>
-      <p class="small">JIANT's installer: "It checks the FM-1 first and writes only over official V15 or JIANT", because
-        "writing it straight over another custom firmware has bricked an FM-1" (one report, not explained).
-        <a href="https://github.com/juanjiant-bit/JIANT#installing-at-your-own-risk">README, Installing</a>.
-        Baudgirl's installer: "I have only tested the installer on M-VAVE's firmware V15 and on my own releases", then asks
-        you to update to V15 first. <a href="https://baudgirl.com/work/FM-1+VA/install">Install page</a> (the sentence is in
-        its script). Both are testing and support scope. Neither says the FM-1 can't take the file.</p>
-    </details>
   </section>
 
   <section class="stage" id="st-file" data-state="now">
@@ -107,13 +98,13 @@
             code that starts the update loader. Felucca's own loader leaves it alone. If power or USB drops while it is being
             rewritten, the FM-1 may not start.</li>
           <li><b>It should be recoverable, but not from this page.</b> The chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057)
-            does not depend on that flash, so the FM-1 can in principle be written again from there. JIANT's manual
+            does not depend on that flash, so the FM-1 can in principle be written again from there. A Felucca-family project's manual
             describes this and, as a last resort, an RP2040 board
             (<a href="https://github.com/juanjiant-bit/JIANT/blob/main/docs/MANUAL.md">manual</a>). That recovery is not
             tested here.</li>
           <li><b>Not tested on a device.</b> M-VAVE's updater rewrites that region on every update with the same bytes.
-            Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca's
-            and JIANT's step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
+            Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca-family
+            step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
             inside it can't be ruled out.</li>
           <li id="risk-data" hidden><b>This package can overwrite saved data.</b> Its flash.bin is larger than V15's, so the
             loader also overwrites flash above 0x93000, where Felucca-family firmwares keep saved projects. V15 itself stops
