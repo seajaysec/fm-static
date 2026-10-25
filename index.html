@@ -78,14 +78,14 @@
     <h2>The route</h2>
     <p class="lead dim">What this page saw, before it sends anything. Nothing here blocks an install except a wrong model.</p>
     <ol id="route" class="route">
-      <li class="cp" data-state="idle"><span class="plate">WAITING</span><div><b>Choose a file and connect your FM-1</b><p>The checkpoints appear here.</p></div></li>
+      <li class="cp" data-state="idle"><span class="plate"><span>WAITING</span></span><div><b>Nothing to check yet</b><p>Checkpoints appear once there is a firmware file and an FM-1.</p></div></li>
     </ol>
   </section>
 
   <section class="stage" id="st-go">
     <h2>Install</h2>
     <p class="installrow"><button id="go" disabled>Install</button> <span id="why" class="small"></span></p>
-    <div id="road" aria-hidden="true"><i id="road-fill"></i></div>
+    <div id="road" aria-hidden="true" hidden><i id="road-fill"></i></div>
     <p id="phase" class="small dim" role="status"></p>
     <p id="status" role="status"></p>
 

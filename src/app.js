@@ -21,7 +21,7 @@ const state = {
 const log = (s) => { $("log").textContent += s + "\n"; $("log").scrollTop = 1e9; };
 const say = (s, cls = "") => { const e = $("status"); e.textContent = s; e.className = cls; };
 const phase = (s) => { $("phase").textContent = s; };
-const bar = (pct) => { $("road-fill").style.width = `${pct}%`; };
+const bar = (pct) => { $("road").hidden = false; $("road-fill").style.width = `${pct}%`; };
 
 const MESSAGES = {
   notfound: "No FM-1 answered. Use a USB data cable, close other apps that use MIDI, and pick its port in the list if it shows up under another name.",
@@ -98,7 +98,7 @@ function checks(dev, pkg) {
     else if (fam === "v15") add("go", "CLEAR", "Path from V15", "The path these packages are built for.");
     else add("unknown", "UNKNOWN", "Package against the running firmware", `${dev.id.text} is closed. Whether it accepts this package is not known; a refusal writes nothing.`);
   }
-  if (!out.length) add("idle", "WAITING", "Choose a file and connect your FM-1", "The checkpoints appear here.");
+  if (!out.length) add("idle", "WAITING", "Nothing to check yet", "Checkpoints appear once there is a firmware file and an FM-1.");
   return out;
 }
 
