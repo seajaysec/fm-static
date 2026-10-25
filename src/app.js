@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.2";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.2";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.2";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.3";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.3";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.3";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.2";
+const VERSION = "2026-10-25.3";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -42,8 +42,8 @@ const kindText = {
 };
 
 const loaderText = {
-  official: "M-VAVE's update loader. It rewrites the whole flash.bin, the FM-1's startup code included.",
-  app: "An app-area-only loader (Felucca's design). It writes the firmware and leaves the startup code and saved data alone.",
+  official: "M-VAVE's update loader. Felucca's source says it rewrites the whole flash.bin, the FM-1's startup code included.",
+  app: "An app-area-only loader (Felucca's design, which JIANT's source keeps). It writes the firmware area and, per that source, leaves the startup code and the data area alone.",
   unknown: "Not one this page recognises.",
 };
 
@@ -62,7 +62,9 @@ function shapeText(pkg) {
 // Step 1 of an update runs in the firmware the FM-1 has now, and that firmware decides whether to accept the package.
 // Firmwares built on Felucca (identity version 700 and up) apply the checks of Felucca's ota.c, read here. What M-VAVE's
 // own firmware and the firmwares built on it check is not known.
-const family = (id) => (id.version === 15 ? "v15" : id.version >= 700 ? "app" : "mvave");
+const family = (id) => (id.version === 15 ? "v15" : id.version >= 700 ? "app" : id.version <= 19 ? "official" : "mvave");
+// identity numbers: up to 19 are M-VAVE's own releases, 20..699 builds on M-VAVE's update system, 700 and up Felucca-family
+const familyText = { official: "an official M-VAVE release other than V15", mvave: "a custom build on M-VAVE's update system", app: "a Felucca-family firmware" };
 
 // What was observed before anything is sent: facts only. Nothing here predicts what the FM-1's firmware will do; that
 // is shown when it happens (events, below).
@@ -77,16 +79,15 @@ function checks(dev, pkg) {
   if (dev) {
     const usual = state.up.patterns.some((p) => dev.name.toLowerCase().includes(p.toLowerCase()));
     if (!usual) {
-      add("detour", "BYPASSED", `Port “${dev.name}”`, "That is not a usual FM-1 name. An updater that finds the FM-1 by name would have reported it missing. This page found it by asking the port who it is.");
+      add("detour", "BYPASSED", `Port “${dev.name}”`, "That is not a usual FM-1 name. An updater that finds the FM-1 by name could have reported it missing. This page found it by asking the port who it is.");
     } else add("go", "CLEAR", `Port “${dev.name}”`, "Answered the FM-1 identity query.");
     if (IS_OTA(dev.id)) {
       add("info", "SEEN", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish update writes the package to it.`);
     } else {
       const fam = family(dev.id);
-      if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point every installer we know of accepts.");
+      if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point installers expect.");
       else add("detour", "BYPASSED", `Running ${dev.id.text}`,
-        (fam === "app" ? "A Felucca-family firmware. " : "A custom build on M-VAVE's update system. ") +
-        "An installer that only starts from official V15 or its own releases would have stopped here. This page does not stop.");
+        `${familyText[fam][0].toUpperCase()}${familyText[fam].slice(1)}. An installer that only starts from official V15 or its own releases could have stopped here. This page does not stop.`);
     }
     if (pkg && !IS_OTA(dev.id) && dev.id.model !== pkg.model)
       add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
@@ -110,13 +111,15 @@ function renderRoute() {
 // after a step-1 stop on a Felucca-family firmware: the request count says which check refused (Felucca's ota.c
 // ota_stage: 2 reads of the UFW header, 1 of the loader's header, then the startup code compared 512 bytes at a time)
 function stepOneRefusal(e, pkg) {
+  // The request counts are read from Felucca's ota.c and JIANT's (both compiled and run on the host); other
+  // Felucca-family builds are assumed to share them and are not checked.
   if (e.code !== "stopped" || e.step !== 1 || !e.from || family(e.from) !== "app") return "";
   const head = `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written.`;
   if (e.served === 2 && pkg.flashLen !== APP_END)
-    return `${head} Its app area is larger than official V15's, which this firmware does not install. Install official V15 first (it installs from here), then this package from V15.`;
+    return `${head} In Felucca's code that is the check that the package's flash.bin is exactly V15's size (this one's is ${hex(pkg.flashLen)}). Some Felucca-family builds do not make that check. A package of V15's size gets past it, though it can still be stopped at the startup-code check.`;
   if (e.served === 3) return `${head} It does not accept this package's update loader.`;
   if (e.served === 4 && pkg.loader === "official")
-    return `${head} It compared the startup code in your FM-1's flash with the package's. The package carries M-VAVE's loader, which would rewrite that region, and yours is not official V15's (as after a rescue that wrote a whole Felucca-family image). The restore mode below can answer that check.`;
+    return `${head} That is its comparison of the startup code in your FM-1's flash with the package's, which is official V15's: the two differ. This page cannot see why (a full-flash rescue with a Felucca-family image is one way). Because the package's loader rewrites that region, the firmware refuses. The restore mode below can answer that check.`;
   return "";
 }
 

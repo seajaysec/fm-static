@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
-<meta name="description" content="Install any FM-1 .fwsc firmware, whatever the FM-1 runs now, and see what other installers would have stopped on.">
+<meta name="description" content="Install any FM-1 .fwsc firmware, whatever the FM-1 runs now, and see what other installers could have stopped on.">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
@@ -23,7 +23,7 @@
   <section class="why" aria-labelledby="why-h">
     <h2 id="why-h">Installers stop where their own firmware ends.</h2>
     <p>Some FM-1 installers only install over official V15 or their own releases. This page looks at the file and the
-      device instead, installs, and says what it saw on the way, including what would have stopped you. Maybe it would have
+      device instead, installs, and says what it saw on the way, including what could have stopped you. Maybe it would have
       worked anyway; then it says that too.</p>
   </section>
 
@@ -57,7 +57,7 @@
       <p id="none" class="dim" hidden>Nothing answered under a usual FM-1 port name. Pick your FM-1 in the port list below.</p>
 
       <h3>MIDI ports</h3>
-      <p class="small">Every port your computer sees. Only a port you press <b>Try</b> on is sent anything. On a Mac a port can keep the name of another device last plugged into that USB socket (Audio MIDI Setup, Window, Show MIDI Studio, renames it).</p>
+      <p class="small">Every port your computer sees. Ports with a usual FM-1 name are asked who they are automatically; any other port is sent nothing until you press <b>Try</b> on it. On a Mac a port can keep the name of another device last plugged into that USB socket (Audio MIDI Setup, Window, Show MIDI Studio, renames it).</p>
       <ul id="ports" class="plain"></ul>
       <p id="ports-empty" class="small dim" hidden>No other ports. If your FM-1 is missing, check the USB cable: it must carry data.</p>
 
@@ -104,7 +104,7 @@
             chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057), which does not depend on that flash. This page can recognise that
             state (the "boot mode" button under Your FM-1) and point you to an open tool, but it cannot write from there, and
             that way back has not been tested. Treat this mode as one with no undo.</li>
-          <li><b>Not tested on a device.</b> M-VAVE's updater rewrites that region on every update with the same bytes.
+          <li><b>Not tested on a device.</b> Felucca's source says M-VAVE's updater rewrites that region as part of every update, with bytes equal to what is already there.
             Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca-family
             step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
             inside it can't be ruled out.</li>
@@ -138,8 +138,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.2</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.3</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.2"></script>
+<script type="module" src="src/app.js?v=2026-10-25.3"></script>
 </body>
 </html>
