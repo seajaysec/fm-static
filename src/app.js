@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.24";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.24";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.24";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.26";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.26";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.26";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.24";
+const VERSION = "2026-10-25.26";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -618,14 +618,14 @@ function refresh() {
   renderRoute();
 }
 
-// m-bootloader's installer package (vendored, fm1-base's web/m-bootloader): its hash must be the pinned one and it must carry
+// m-bootloader's installer package (vendored, fm1-base's web/m-bootloader): its hash must be the recorded one and it must carry
 // m-bootloader's identity, FM-1_099; it has no flash.bin: the running firmware stages its writer, which rewrites the boot area
 async function bootPackage() {
   const base = new URL("../vendor/fm1-base/", import.meta.url);
   const raw = new Uint8Array(await (await fetch(new URL("m-bootloader/fm1-uboot-1.2.fwsc", base))).arrayBuffer());
-  const pin = (await (await fetch(new URL("PIN", base))).text()).split("\n").find((l) => l.startsWith("web/m-bootloader/fm1-uboot-1.2.fwsc "));
+  const pin = (await (await fetch(new URL("SOURCE", base))).text()).split("\n").find((l) => l.startsWith("web/m-bootloader/fm1-uboot-1.2.fwsc "));
   const got = await sha256hex(raw);
-  if (!pin || pin.split(" ")[1] !== got || productOf(raw) !== "FM-1_099") throw new Error("the bundled m-bootloader package is not the pinned one");
+  if (!pin || pin.split(" ")[1] !== got || productOf(raw) !== "FM-1_099") throw new Error("the bundled m-bootloader package is not the recorded one");
   return logicalImage(raw);
 }
 

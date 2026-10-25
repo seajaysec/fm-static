@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          commit=$(grep '^commit ' vendor/fm1-base/PIN | cut -d' ' -f2)
+          commit=$(grep '^commit ' vendor/fm1-base/SOURCE | cut -d' ' -f2)
           branch="sync-fm1-base-${commit:0:7}"
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

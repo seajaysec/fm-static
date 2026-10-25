@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 //
-// The update protocol is fm1-base's (vendor/fm1-base/fm1ota.js, MPL-2.0, copied unmodified: see vendor/fm1-base/PIN).
+// The update protocol is fm1-base's (vendor/fm1-base/fm1ota.js, MPL-2.0, copied unmodified: see vendor/fm1-base/SOURCE).
 // This file adds what that one does not do, without copying any of its internals:
 //   - finding the FM-1 under any port name: the page asks the ports it is allowed to ask (usual FM-1 names, ports the
 //     user picked, ports that appeared during an update), whatever they are called
@@ -11,7 +11,7 @@
 //   - what step 1 did when it stopped, so the page can say which check refused
 // fm1-base's find() only probes ports whose name looks like an FM-1's. To let it probe the ports we choose, it is given a
 // view of the MIDI ports that holds only those, under a name its own test accepts.
-import { Updater as Base } from "../vendor/fm1-base/fm1ota.js?v=2026-10-25.24";
+import { Updater as Base } from "../vendor/fm1-base/fm1ota.js?v=2026-10-25.26";
 
 export const IS_OTA = (id) => /^ota-/i.test(id.model);
 // port names probed without asking (substrings, any case); any other port only after the user picks it

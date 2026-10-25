@@ -1,5 +1,6 @@
-# Files copied unmodified from https://github.com/charlesvestal/fm1-base (MPL-2.0; m-bootloader: MIT).
-# tools/sync-base.sh rewrites this file. Do not edit the copies: change fm1-base, or the adapter in src/updater.js.
+# Where these files come from: copied unmodified from https://github.com/charlesvestal/fm1-base (MPL-2.0; m-bootloader: MIT).
+# This is a record, not a freeze: tools/sync-base.sh and the weekly job move it forward to fm1-base's latest.
+# Do not edit the copies: change fm1-base, or the adapter in src/updater.js.
 commit fa7b203e6803a23a8be0bf560c46d07db836ee89
 date 2026-10-25
 web/fm1ota.js e5043b9104fa01eff7cb6c279a88f5d2f4822a033d6ad05530bf4dab62bb6172

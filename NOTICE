@@ -11,7 +11,7 @@ Lineage
 vendor/fm1-base/ holds files copied unmodified from fm1-base (https://github.com/charlesvestal/fm1-base), Copyright (C) 2026
 Charles Vestal and Leo Kuroshita, licensed MPL-2.0 (vendor/fm1-base/LICENSE-MPL-2.0.txt): the FM-1 update protocol
 (fm1ota.js) and the package reader (fm1pkg.js), and m-bootloader 1.2's installer package by Julius Vitkauskas
-(vendor/fm1-base/m-bootloader/, MIT, with its licence). vendor/fm1-base/PIN names the commit they come from. Both
+(vendor/fm1-base/m-bootloader/, MIT, with its licence). vendor/fm1-base/SOURCE names the commit they come from. Both
 descend from Felucca's web installer (https://github.com/hugelton/Felucca) by Leo Kuroshita, GPL-3.0-only. src/updater.js
 builds on them; the packaging code in src/fm1pkg.js (integrity check, hashes) is modified from Felucca's web/fm1pkg.js,
 and each file says what was changed.

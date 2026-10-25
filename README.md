@@ -50,7 +50,7 @@ To fix the name itself on a Mac: Audio MIDI Setup, Window, Show MIDI Studio, dou
 ## Where the update protocol comes from
 
 The update protocol and the package reader are [fm1-base](https://github.com/charlesvestal/fm1-base)'s, copied unmodified into
-`vendor/fm1-base/` (pinned in `vendor/fm1-base/PIN`). `src/updater.js` adds what the page does on top: finding the FM-1 under any
+`vendor/fm1-base/` (recorded in `vendor/fm1-base/SOURCE`). `src/updater.js` adds what the page does on top: finding the FM-1 under any
 port name, following the ports through the update loader, the restore step, and what step 1 refused. To take fm1-base's latest:
 `tools/sync-base.sh`. A weekly GitHub job does the same and opens a pull request when anything changed, so fixes arrive for review
 and nothing reaches the page without a merge. `node tools/check-vendor.mjs` checks the copies still offer what the adapter uses.
@@ -85,18 +85,20 @@ flowchart TD
   M --> S[If the write is cut off, the FM-1 stays in update mode. Reconnect and the Install button reads Finish update: it continues the same install]
   S --> O
   classDef notrun stroke-dasharray: 6 4
-  class H,J1,S,R,X,W notrun
+  class H,J1,S,R,X notrun
 ```
 
 ## What has and has not been tested
 
-Run on a real FM-1 (macOS, Chrome): installs in every direction between official V15, Baudgirl releases, Felucca-family
-firmwares and Mutable Dreams, with and without the full wipe; a package found through a GitHub address; an FM-1 whose port
-name the page does not recognise (found with Try this port, then followed through the update loader).
+Run on a real FM-1 (macOS, Chrome): installs in every direction between official V15, M-VAVE's V16, Baudgirl releases,
+Felucca-family firmwares and Mutable Dreams, with and without the full wipe; a real refusal by a newer Felucca and the way
+round it; installing m-bootloader after a firmware and then putting M-VAVE's V16 back over it; a package found through a
+GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
+update loader); another app holding the MIDI ports during an install.
 
 Not tested on a device: finishing an interrupted update, the startup-code refusal and the restore step, boot-mode
-detection, the wrong-model refusal. Out of scope: how the firmware sounds, the SMK-37 (it may work; completely untested),
-browsers other than Chrome.
+detection, the wrong-model refusal, M-VAVE's Open firmware, m-bootloader's recovery menu and update-mode keys. Out of scope:
+how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 
 ## Lineage and licence
 

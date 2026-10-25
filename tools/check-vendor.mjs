@@ -8,10 +8,10 @@ const read = (p) => readFileSync(new URL(p, root));
 let bad = 0;
 const need = (ok, what) => { console.log((ok ? "ok      " : "MISSING ") + what); if (!ok) bad++; };
 
-const pin = Object.fromEntries(read("vendor/fm1-base/PIN").toString().split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(" ")));
+const pin = Object.fromEntries(read("vendor/fm1-base/SOURCE").toString().split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(" ")));
 for (const f of ["web/fm1ota.js", "web/fm1pkg.js", "web/m-bootloader/fm1-uboot-1.2.fwsc"]) {
   const got = createHash("sha256").update(read("vendor/fm1-base/" + f.replace("web/", ""))).digest("hex");
-  need(pin[f] === got, `${f} matches the hash in PIN`);
+  need(pin[f] === got, `${f} matches the hash in SOURCE`);
 }
 const ota = await import(new URL("vendor/fm1-base/fm1ota.js", root));
 const U = ota.Updater && ota.Updater.prototype;
