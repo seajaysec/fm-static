@@ -5,6 +5,7 @@
 // From Felucca's web/fm1pkg.js (https://github.com/hugelton/Felucca).
 // Modified 2026-10-06 by Chris Farrell for fm-static: reduced to reading a package
 // (identity, CRC check, origin hint, logical image); the package building code is removed.
+// Modified 2026-10-24: the package's update parts (which loader, flash.bin's size, whether the head is official V15's).
 //
 // Reading an FM-1 .fwsc in the browser: its identity, an integrity check, and the image the
 // device addresses during an update. Nothing is modified.
@@ -71,6 +72,40 @@ export function checkIntegrity(raw) {
   throw new Error("no flash.bin in the package");
 }
 
+// The update parts of a package, as the running firmware sees them in step 1: flash.bin (the head [0, 0x4000), the
+// SPL and isd_config, then the app area) and ota.bin (the update loader the firmware stages). Taken from the logical
+// image, where the UFW entry offsets point.
+export const STOCK_HEAD_SHA256 = "d9f43191777656de01c7bed4f9e9ba2e34e94832c5d2ed02c3fc7ab7a6d9bd67";   // official V15's
+export const APP_END = 0x93000;   // flash.bin's size in official V15: the head and the app area
+const HEAD_LEN = 0x4000;
+
+function entries(lg) {
+  const h = lg.slice(0, 0x400);
+  enc(h, 0, 0x40);
+  const out = {};
+  for (let i = 0, n = u16(h, 8); i < n; i++) {
+    const e = h.slice(0x40 + i * 0x50, 0x90 + i * 0x50);
+    enc(e, 0, 0x50);
+    out[u16(e, 0)] = { off: u32(e, 8), len: u32(e, 12) };   // 0 flash.bin, 100 ota.bin
+  }
+  return out;
+}
+
+// loader: "official" (M-VAVE's: it rewrites the whole flash.bin, head included), "app" (an app-area-only loader, as
+// Felucca's: it never writes the head), or "unknown". The tests are the ones a running Felucca-based firmware applies
+// in step 1 (known CRCs; the loader marker in its first LZ4 literals).
+async function parts(lg) {
+  const e = entries(lg), fl = e[0], ota = e[100];
+  let loader = "unknown";
+  if (ota && ota.off + 0x88 <= lg.length) {
+    const b = lg.subarray(ota.off, ota.off + 0x88);
+    if (u16(b, 0) === 0xEBAA && u16(b, 2) === 0x5881 && u32(b, 8) === 0x4DE1) loader = "official";
+    else if (hasMark(b.subarray(0x48))) loader = "app";
+  }
+  const head = fl && fl.off + HEAD_LEN <= lg.length ? await sha256hex(lg.subarray(fl.off, fl.off + HEAD_LEN)) : "";
+  return { loader, flashLen: fl ? fl.len : 0, stockHead: head === STOCK_HEAD_SHA256 };
+}
+
 export async function sha256hex(bytes) {
   const d = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, "0")).join("");
@@ -85,7 +120,8 @@ function hasMark(raw) {
   return false;
 }
 
-// -> { product, model, size, sha256, kind: "stock" | "felucca" | "other", image }; throws on a bad file
+// -> { product, model, size, sha256, kind: "stock" | "felucca" | "other", loader, flashLen, stockHead, image };
+// throws on a bad file
 export async function inspect(bytes) {
   const raw = new Uint8Array(bytes);
   const product = productOf(raw);
@@ -97,5 +133,6 @@ export async function inspect(bytes) {
   // string; that is a text match anyone can put in a file, NOT a signature, so it is only a hint.
   // Anything else is of unknown origin. The page vouches for nothing but the official hash.
   const kind = sha256 === STOCK_V15_SHA256 ? "stock" : hasMark(raw) ? "felucca" : "other";
-  return { product, model: m[1], size: raw.length, sha256, kind, image: logicalImage(raw) };
+  const image = logicalImage(raw);
+  return { product, model: m[1], size: raw.length, sha256, kind, ...(await parts(image)), image };
 }

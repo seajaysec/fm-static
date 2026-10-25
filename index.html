@@ -38,6 +38,7 @@
         <dt>Size</dt><dd id="f-size"></dd>
         <dt>SHA-256</dt><dd id="f-sha"></dd>
         <dt>Origin</dt><dd id="f-kind"></dd>
+        <dt>Loader</dt><dd id="f-loader"></dd>
       </dl>
       <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from someone I trust and accept the risk of installing it.</label></p>
     </div>
@@ -68,6 +69,7 @@
 
   <section class="stage" id="st-go">
     <h2>Install</h2>
+    <p id="path" class="small warn" hidden></p>
     <p><button id="go" disabled>Install</button> <span id="why" class="small"></span></p>
     <div id="bar" aria-hidden="true"></div>
     <p id="status" role="status"></p>

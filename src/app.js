@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), install.
 import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js";
-import { inspect } from "./fm1pkg.js";
+import { inspect, APP_END } from "./fm1pkg.js";
 import { createScope } from "./scope.js";
 import { loadNames, saveNames } from "./ports.js";
 
@@ -39,6 +39,47 @@ const kindText = {
   other: ["unknown origin", "carries its own update loader, which this page cannot vouch for"],
 };
 
+const loaderText = {
+  official: "M-VAVE's update loader: it rewrites the whole flash.bin, the FM-1's startup code included",
+  app: "an app-area-only loader (Felucca's design): it writes the firmware and leaves the startup code and saved data alone",
+  unknown: "not one this page recognises",
+};
+
+// ------------------------------------------------------------ update paths ---
+// Step 1 of an update runs in the firmware the FM-1 has now, and that firmware decides whether to accept the
+// package. Firmwares built on Felucca (identity version 700 and up) apply the checks of Felucca's ota.c; what the
+// others (M-VAVE's own, and firmwares built on it) check is not known here.
+const family = (id) => (id.version === 15 ? "v15" : id.version >= 700 ? "app" : "mvave");
+
+// before Install: what the running firmware is likely to do with this package (a note, never a block)
+function pathNote(dev, pkg) {
+  if (!dev || !pkg || IS_OTA(dev.id)) return "";
+  const fam = family(dev.id), big = pkg.flashLen !== APP_END;
+  if (fam === "app" && pkg.loader === "official") {
+    return `Your FM-1 runs ${dev.id.text}, a Felucca-based firmware. It accepts a package with M-VAVE's loader only if the FM-1's startup code is still official V15's; after a rescue that rewrote the whole flash, it refuses.` +
+      (big ? " This package's app area is also larger than V15's, which recent Felucca-based firmwares refuse." : "") +
+      " A refusal writes nothing.";
+  }
+  if (fam === "mvave" && pkg.loader === "app") {
+    return `Your FM-1 runs ${dev.id.text}, not official V15. This package's loader writes the app area only (up to 0x${APP_END.toString(16)}); whatever the current firmware keeps above that stays in flash. Some Felucca-based firmwares ask you to install official V15 first on this path: going straight across has been reported to brick an FM-1.`;
+  }
+  return "";
+}
+
+// after a step-1 stop on a Felucca-based firmware: the request count says which check refused (Felucca's ota.c
+// ota_stage: 2 reads of the UFW header, 1 of the loader's header, then the startup code compared 512 bytes at a time)
+function stepOneRefusal(e, pkg) {
+  if (e.code !== "stopped" || e.step !== 1 || !e.from || family(e.from) !== "app") return "";
+  const head = `The firmware on your FM-1 (${e.from.text}) refused the package; nothing was written.`;
+  if (e.served === 2 && pkg.flashLen !== APP_END)
+    return `${head} Its app area is larger than official V15's, which this firmware does not install. Install official V15 first (it installs from here), then this package from V15.`;
+  if (e.served === 3)
+    return `${head} It does not accept this package's update loader.`;
+  if (e.served === 4 && pkg.loader === "official")
+    return `${head} The package carries M-VAVE's loader, which would rewrite the FM-1's startup code, and the startup code on your FM-1 is not official V15's (as after a rescue that rewrote the whole flash with a Felucca-based image). From this firmware only packages with an app-area-only loader install. Getting back to V15's startup code needs a full-flash rescue (the chip's UBOOT mode), which this page does not do.`;
+  return "";
+}
+
 // ---------------------------------------------------------------- firmware ---
 
 async function loadFile(file) {
@@ -56,6 +97,8 @@ async function loadFile(file) {
       $("f-sha").textContent = pkg.sha256;
       $("f-kind").textContent = `${k}: ${why}`;
       $("f-kind").className = pkg.kind === "other" ? "warn" : "";
+      $("f-loader").textContent = loaderText[pkg.loader] +
+        (pkg.flashLen !== APP_END ? `; app area larger than V15's (flash.bin 0x${pkg.flashLen.toString(16)})` : "");
       $("trust-row").hidden = pkg.kind !== "other";
       $("trust").checked = false;
       $("fileinfo").hidden = false;
@@ -209,6 +252,9 @@ function refresh() {
   $("go").textContent = resume ? "Finish update" : "Install";
   $("go").disabled = state.busy || !!why;
   $("why").textContent = state.busy ? "" : why;
+  const note = why || state.done || state.busy ? "" : pathNote(dev, pkg);
+  $("path").textContent = note;
+  $("path").hidden = !note;
   $("rescan").disabled = state.busy || !state.up;
   $("file").disabled = state.busy;
 
@@ -255,7 +301,7 @@ async function install() {
     scope.set({ mode: "locked" });
   } catch (e) {
     log(String(e && e.stack || e));
-    say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : (MESSAGES[e.code] || `Error: ${e.message}`), "err");
+    say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : (stepOneRefusal(e, pkg) || MESSAGES[e.code] || `Error: ${e.message}`), "err");
     scope.set({ mode: "error" }); lcd("stopped"); bar(pct);
   }
   state.busy = false;

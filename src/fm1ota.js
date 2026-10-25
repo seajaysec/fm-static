@@ -7,6 +7,7 @@
 // Modified 2026-10-06 by Chris Farrell for fm-static: port discovery (scan, probe, ports, select,
 // setPatterns) and watch(), so that an FM-1 whose MIDI port name changes during an update (the loader
 // has another USB product id; macOS can show a cached name) is still found.
+// Modified 2026-10-24: a step-1 refusal carries how many requests the firmware made (the page says why it refused).
 //
 // The FM-1 USB-MIDI update protocol over WebMIDI (after tools/fm1_install.py).
 // Step 1: the running firmware (official
@@ -251,7 +252,11 @@ export class Updater {
     await sleep(2000);
     const s1 = await this.serve(dev.link, image, 0xE0000000, 8000, (n) => step("verify", n));
     dev.link.close();
-    if (!s1.finished) throw fail(s1.lost ? "lost" : "stopped", `the device ${s1.lost ? "was disconnected" : "stopped"} after ${s1.served} requests: nothing was written`);
+    if (!s1.finished) {
+      // the running firmware refused the package: how far it read says why (app.js stepOneRefusal)
+      const e = fail(s1.lost ? "lost" : "stopped", `the device ${s1.lost ? "was disconnected" : "stopped"} after ${s1.served} requests: nothing was written`);
+      throw Object.assign(e, { step: 1, served: s1.served, from: dev.id });
+    }
     step("loader");
     await sleep(3000);
     const ota = await this.waitFor((id) => id.model === "ota-" + model, 30000);
