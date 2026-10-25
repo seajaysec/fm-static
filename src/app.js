@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.7";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.7";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.7";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.8";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.8";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.8";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.7";
+const VERSION = "2026-10-25.8";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -95,6 +95,8 @@ function devChecks(dev, pkg) {
       else add("detour", "BYPASSED", `Running ${dev.id.text}`,
         `${familyText[fam][0].toUpperCase()}${familyText[fam].slice(1)}. An installer that only starts from official V15 or its own releases could have stopped here. This page does not stop.`);
     }
+    if (pkg && pkg.kind === "other" && !$("trust").checked)
+      add("idle", "WAITING", "Source not confirmed", "Install appears once you confirm, in the box under the file's checks, that the file comes from a source you trust.");
     if (pkg && !IS_OTA(dev.id) && dev.id.model !== pkg.model)
       add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
   }
