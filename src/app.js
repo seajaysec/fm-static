@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.13";
-import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.13";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.13";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.15";
+import { inspect, rebuild, wipeFlash, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.15";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.15";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.13";
+const VERSION = "2026-10-25.15";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -16,6 +16,7 @@ const state = {
   names: loadNames(),          // port names the user added
   tried: new Map(),            // port -> "no answer" after a manual try
   frozen: null,                // the device facts as they were when the install started
+  progress: null,              // { pct, label } of the step being done, drawn inside the last event
   events: [],                  // what happened during the install, shown on the route
   refusedStartup: false,       // the running firmware stopped at its startup-code check (see stepOneRefusal)
   donor: null,                 // a Felucca-family package whose startup code answers that check
@@ -25,8 +26,9 @@ const state = {
 
 const log = (s) => { $("logbox").hidden = false; $("log").textContent += s + "\n"; $("log").scrollTop = 1e9; };
 const say = (s, cls = "") => { const e = $("status"); e.textContent = s; e.className = cls; };
-const phase = (s) => { $("phase").textContent = s; };
-const bar = (pct) => { $("road").hidden = false; $("road-fill").style.width = `${pct}%`; };
+// The progress of the step in progress is drawn inside that step of the chain (the last event), not apart from it.
+let shown = -1;
+const progress = (pct, label) => { state.progress = pct == null ? null : { pct, label }; const k = pct == null ? -1 : Math.round(pct); if (k !== shown) { shown = k; renderRoute(); } };
 
 const MESSAGES = {
   notfound: "No FM-1 answered. Use a USB data cable, close other apps that use MIDI, and pick its port in the list if it shows up under another name.",
@@ -108,7 +110,12 @@ function devChecks(dev, pkg) {
 }
 
 // what happens during an install, in order, as it happens
-function note(st, plate, title, text) { state.events.push({ state: st, plate, title, text }); $("after").hidden = false; renderRoute(); }
+function note(st, plate, title, text) {
+  state.events.push({ state: st, plate, title, text }); $("after").hidden = false; renderRoute();
+  // the chain grows downward while an install runs: keep its newest step in view (only if it is off screen)
+  const last = $("route-events").lastElementChild;
+  if (state.busy && last) last.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
 
 const wipeOn = () => $("wipe").checked;
 const items = (list) => list.map((c) => {
@@ -123,7 +130,13 @@ const items = (list) => list.map((c) => {
 function renderRoute() {
   $("route-file").replaceChildren(...items(fileChecks(state.pkg)));
   $("route-dev").replaceChildren(...items(state.frozen || devChecks(selectedDevice(), state.pkg)));
-  $("route-events").replaceChildren(...items(state.events));
+  const evs = items(state.events), last = evs[evs.length - 1];
+  if (last && state.busy && state.progress) {
+    const body = last.lastElementChild;
+    body.append(make("div", { className: "bar", role: "progressbar", ariaValueMin: 0, ariaValueMax: 100, ariaValueNow: Math.round(state.progress.pct), ariaLabel: state.progress.label }, make("i", { style: `width:${state.progress.pct}%` })),
+      make("p", { className: "small", textContent: state.progress.label }));
+  }
+  $("route-events").replaceChildren(...evs);
 }
 
 // after a step-1 stop on a Felucca-family firmware: the request count says which check refused (Felucca's ota.c
@@ -591,7 +604,6 @@ function refresh() {
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
   renderRoute();
-  if (!state.busy && !state.done) phase(dev ? `${dev.id.text} on ${dev.name}` : state.access ? "No FM-1 selected" : "");
 }
 
 async function install(startup = null) {
@@ -611,7 +623,7 @@ async function install(startup = null) {
   }
   const total = Math.max(1, Math.round(sent.image.length / 512));
   let pct = 0;
-  const to = (p, text) => { pct = p; bar(p); phase(text ?? `Writing ${Math.round(p)}%`); };
+  const to = (p, text) => { pct = p; progress(p, text ?? `Writing ${Math.round(p)}%`); };
   let reads = 0, wrote = false;
   const step = (k, a) => {
     log(`${k} ${a ?? ""}`);
@@ -645,9 +657,10 @@ async function install(startup = null) {
     else if (e.code === "stopped" && e.step === 1) note("barrier", "REFUSED", "Step 1: stopped by the FM-1's firmware", `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written. Which check stopped it is not known for this firmware.`);
     say(e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? "Stopped: the FM-1's firmware refused the package. Nothing was written. Details on the route above." : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
     state.frozen = null;
-    phase("Stopped"); bar(pct);
+    progress(null);
   }
   state.busy = false;
+  progress(null);
   setTimeout(scan, 1500);
   state.done = pct === 100 && !$("status").classList.contains("err");
   refresh();

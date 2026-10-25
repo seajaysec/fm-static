@@ -128,11 +128,6 @@ summary { cursor: pointer; font: 600 1rem var(--head); }
 .cp[data-state="detour"]::before { background: var(--orange); }
 
 .installrow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-#road { height: 14px; margin-top: 14px; border-radius: 2px; background: #0e0f11; outline: 1px solid var(--line); position: relative; overflow: hidden; }
-#road::after { content: ""; position: absolute; inset: 6px 0 auto; height: 2px; background: repeating-linear-gradient(90deg, #eef0ee 0 14px, transparent 14px 28px); opacity: .55; }
-#road-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--orange); transition: width .25s cubic-bezier(.2, .8, .2, 1); z-index: 1; }
-#road-fill::after { content: ""; position: absolute; inset: 6px 0 auto; height: 2px; background: repeating-linear-gradient(90deg, var(--on-orange) 0 14px, transparent 14px 28px); }
-#phase { margin: 6px 0 0; min-height: 1.5em; }
 #status { min-height: 1.6em; margin-top: 8px; max-width: 54ch; font-weight: 500; }
 .ok { color: var(--go); } .err { color: var(--stop); }
 
@@ -154,7 +149,7 @@ footer { margin-top: 40px; max-width: 54ch; }
   dl { grid-template-columns: 1fr; gap: 2px 0; }
   dd { margin-bottom: 8px; }
 }
-@media (prefers-reduced-motion: reduce) { #road-fill { transition: none; } button:active:not(:disabled) { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } button:active:not(:disabled) { transform: none; } }
 
 dialog { max-width: min(520px, calc(100vw - 32px)); padding: 20px 22px 6px; background: var(--panel); color: var(--ink); border: 2px solid var(--ink); border-radius: 0; }
 dialog::backdrop { background: rgba(14, 15, 17, .6); }
@@ -173,3 +168,9 @@ dialog h3 { margin-top: 0; }
 
 #url-results .dl { font: 500 .95rem var(--head); border: 1px solid var(--dim); border-radius: 3px; padding: 5px 12px; text-decoration: none; color: var(--ink); }
 #url-results .dl:hover { background: var(--ink); color: var(--panel); }
+
+/* the step in progress carries its bar: asphalt, a dashed centre line, the fill in orange */
+.bar { height: 14px; margin-top: 10px; border-radius: 2px; background: #0e0f11; outline: 1px solid var(--line); position: relative; overflow: hidden; max-width: 34rem; }
+.bar::after { content: ""; position: absolute; inset: 6px 0 auto; height: 2px; background: repeating-linear-gradient(90deg, #eef0ee 0 14px, transparent 14px 28px); opacity: .55; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--orange); transition: width .25s cubic-bezier(.2, .8, .2, 1); z-index: 1; }
+.bar i::after { content: ""; position: absolute; inset: 6px 0 auto; height: 2px; background: repeating-linear-gradient(90deg, var(--on-orange) 0 14px, transparent 14px 28px); }
