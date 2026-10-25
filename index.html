@@ -67,7 +67,9 @@
         <ul id="custom" class="chips" aria-label="Your names"></ul>
         <form id="add-name"><input id="new-name" placeholder="the name your FM-1 shows up under" aria-label="New port name"><button class="small" type="submit">Add name</button></form>
       </details>
-      <p class="after"><button id="rescan" class="small">Rescan</button></p>
+      <p class="after"><button id="rescan" class="small">Rescan</button>
+        <button id="boot-check" class="small" hidden>Nothing shows up: is it in boot mode?</button></p>
+      <div id="boot-msg" hidden></div>
     </div>
   </section>
 
@@ -97,9 +99,10 @@
           <li><b>It rewrites the one region a failed write can leave unbootable.</b> The first 16 KB of flash holds the
             code that starts the update loader. Felucca's own loader leaves it alone. If power or USB drops while it is being
             rewritten, the FM-1 may not start.</li>
-          <li><b>This page cannot recover it.</b> The chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057) does not depend on that
-            flash, so an FM-1 that stops starting can in principle be written again from there. Nothing here does that yet,
-            and that recovery has not been tested by this page. Treat this mode as one with no undo.</li>
+          <li><b>This page cannot recover it.</b> If a write is cut off badly, the FM-1 may stop starting and fall back to the
+            chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057), which does not depend on that flash. This page can recognise that
+            state (the "boot mode" button under Your FM-1) and point you to an open tool, but it cannot write from there, and
+            that way back has not been tested. Treat this mode as one with no undo.</li>
           <li><b>Not tested on a device.</b> M-VAVE's updater rewrites that region on every update with the same bytes.
             Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca-family
             step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check

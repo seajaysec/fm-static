@@ -279,6 +279,26 @@ async function tryPort(name, button) {
   refresh();
 }
 
+// ------------------------------------------------------------- boot mode ---
+// A FM-1 whose firmware does not start falls back to the chip's ROM boot mode (WL80UBOOT, USB vendor 4C4A): not a MIDI
+// device, so Web MIDI never sees it; WebUSB can list it (nothing is opened or sent).
+if (navigator.usb) $("boot-check").hidden = false;
+$("boot-check").addEventListener("click", async () => {
+  const box = $("boot-msg");
+  box.replaceChildren();
+  let dev = null;
+  try { dev = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x4C4A }] }); } catch (e) { log(`usb: ${e.name}`); }
+  const link = (href, text) => make("a", { href, textContent: text, rel: "noopener" });
+  if (!dev) box.append(make("p", { className: "small", textContent: "No boot-mode device was found or chosen. Replug the FM-1 with a USB data cable straight into the computer and try again." }));
+  else box.append(
+    make("p", { className: "err", textContent: `Your FM-1 is in the chip's boot mode (${dev.productName || "WL80UBOOT"}, ${dev.vendorId.toString(16)}:${dev.productId.toString(16)}). Its firmware does not start, so it has no MIDI port for this page to find.` }),
+    make("p", {}, "Sorry: this page can't write to it from there, and it should be easier than this. The open tool ", link("https://github.com/kagaimiq/jl-uboot-tool", "jl-uboot-tool"),
+      " talks to that mode, but it ships no loader for this chip family (its README lists WL82/AC791N as unknown), so expect some work. ",
+      link("https://github.com/kurogedelic/FM-1-transporter", "FM-1 Transporter"), " is the recovery Felucca-family projects document. Neither is tested here.")
+  );
+  box.hidden = false;
+});
+
 // ----------------------------------------------------------------- install ---
 
 function selectedDevice() { return state.devices.find((d) => d.name === state.selected) || null; }
