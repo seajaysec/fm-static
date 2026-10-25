@@ -347,9 +347,9 @@ function refresh() {
   const resume = dev && IS_OTA(dev.id);
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
   let why = "";
-  if (!pkg) why = "Choose a firmware file.";
-  else if (!state.access) why = "Connect your FM-1.";
-  else if (!dev) why = "No device selected.";
+  if (!pkg) why = "Waiting for a firmware file, chosen in the first box above.";
+  else if (!state.access) why = "Waiting for your FM-1: press Connect above.";
+  else if (!dev) why = "Waiting for an FM-1 to be selected above.";
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (pkg.kind === "other" && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
   $("go").textContent = resume ? "Finish update" : "Install";
