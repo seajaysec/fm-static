@@ -161,3 +161,9 @@ dialog::backdrop { background: rgba(14, 15, 17, .6); }
 dialog h3 { margin-top: 0; }
 
 .ver { display: block; margin-top: 8px; font-family: var(--mono); font-size: .85rem; }
+
+.urlform { margin-top: 14px; }
+.urlform label { display: block; font: 600 1rem var(--head); margin-bottom: 6px; }
+.urlrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.urlrow input { flex: 1 1 18rem; min-width: 0; font: inherit; background: var(--wash); color: var(--ink); border: 1px solid var(--dim); border-radius: 3px; padding: 7px 10px; }
+#url-results .meta { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }

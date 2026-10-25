@@ -21,9 +21,8 @@
 
 <main class="wrap">
   <section class="why">
-    <p>fm-static installs a <code>.fwsc</code> firmware file on an M-VAVE FM-1. Use it when another installer can't: it can't
-      find your FM-1, or it only installs over official V15 or its own releases. fm-static checks the file and the FM-1,
-      installs, and reports what it found along the way.</p>
+    <p>fm-static installs a <code>.fwsc</code> firmware file on an M-VAVE FM-1. Use it when you're finding it hard to get your
+      FM-1 to flash through other means. Bring a <code>.fwsc</code> file and follow the process through to the end.</p>
   </section>
 
   <section class="stage" id="st-file" data-state="now">
@@ -34,12 +33,19 @@
       <span class="drop-sub" id="drop-name">No file chosen</span>
       <input id="file" type="file" accept=".fwsc" aria-label="Firmware file">
     </label>
+    <form id="url-form" class="urlform" novalidate>
+      <label for="url">Or paste the address of a page that offers the firmware</label>
+      <span class="urlrow"><input id="url" type="text" inputmode="url" placeholder="https://" spellcheck="false" autocomplete="off"><button class="small" type="submit">Find files</button></span>
+    </form>
+    <p id="url-msg" class="small" role="status" hidden></p>
+    <ul id="url-results" class="plain"></ul>
     <div id="fileinfo" hidden>
       <dl>
         <dt>File</dt><dd id="f-name"></dd>
         <dt>Identity</dt><dd id="f-id"></dd>
         <dt>Size</dt><dd id="f-size"></dd>
         <dt>SHA-256</dt><dd id="f-sha" class="mono hash"></dd>
+        <dt id="f-source-t" hidden>Source</dt><dd id="f-source" class="mono" hidden></dd>
         <dt>Origin</dt><dd id="f-kind"></dd>
         <dt>Loader</dt><dd id="f-loader"></dd>
       </dl>
@@ -128,8 +134,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.5</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.6</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.5"></script>
+<script type="module" src="src/app.js?v=2026-10-25.6"></script>
 </body>
 </html>

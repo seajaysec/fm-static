@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.5";
-import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.5";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.5";
+import { Updater, IS_OTA, PRESET_PORTS } from "./fm1ota.js?v=2026-10-25.6";
+import { inspect, APP_END } from "./fm1pkg.js?v=2026-10-25.6";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.6";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.5";
+const VERSION = "2026-10-25.6";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -137,7 +137,7 @@ function stepOneRefusal(e, pkg) {
 
 // ---------------------------------------------------------------- firmware ---
 
-async function loadFile(file) {
+async function loadFile(file, source = "") {
   state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; $("after").hidden = true;
   $("fileinfo").hidden = true;
   if (file) {
@@ -148,6 +148,7 @@ async function loadFile(file) {
       state.pkg = pkg;
       if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
       $("f-name").textContent = file.name;
+      $("f-source").textContent = source; $("f-source").hidden = $("f-source-t").hidden = !source;
       $("f-id").textContent = pkg.product;
       $("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
       $("f-sha").replaceChildren(...pkg.sha256.match(/.{1,8}/g).map((g) => make("span", { textContent: g })));
@@ -166,7 +167,71 @@ async function loadFile(file) {
   refresh();
 }
 
-$("file").addEventListener("change", () => loadFile($("file").files[0]));
+$("file").addEventListener("change", () => { $("url-results").replaceChildren(); $("url-msg").hidden = true; loadFile($("file").files[0]); });
+
+// ------------------------------------------------- firmware from an address ---
+// The browser fetches the page itself and looks for .fwsc addresses in its source: nothing goes through any server of
+// ours. A site must allow other pages to read it (CORS) or the browser refuses; many do not.
+const FWSC = /[A-Za-z0-9_\-.\/%+:@~=&?]*?\.fwsc(?![A-Za-z0-9])/g;
+const MAX_FILE = 8 * 1024 * 1024;
+const urlMsg = (s, cls = "small") => { const m = $("url-msg"); m.textContent = s; m.className = cls; m.hidden = !s; };
+const blocked = "The browser could not read that address. Most often the site does not allow other pages to read it, or it is unreachable. Download the file there and drop it into the box above.";
+
+async function fetchBytes(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`.trim());
+  const len = +r.headers.get("content-length") || 0;
+  if (len > MAX_FILE) throw new Error("that file is far larger than any FM-1 firmware");
+  const buf = await r.arrayBuffer();
+  if (buf.byteLength > MAX_FILE) throw new Error("that file is far larger than any FM-1 firmware");
+  return buf;
+}
+
+async function useUrl(u) {
+  urlMsg(`Fetching ${u.pathname.split("/").pop()} from ${u.host}…`);
+  try {
+    const buf = await fetchBytes(u.href);
+    const name = decodeURIComponent(u.pathname.split("/").pop() || "firmware.fwsc");
+    urlMsg("");
+    $("url-results").replaceChildren();
+    await loadFile(new File([buf], name), u.href);
+    if (state.pkg) $("drop-name").textContent = name;
+  } catch (e) { urlMsg(e instanceof TypeError ? blocked : `Could not fetch that file: ${e.message}.`, "small err"); }
+}
+
+$("url-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  $("url-results").replaceChildren();
+  let page;
+  let raw = $("url").value.trim();
+  if (raw && !/^[a-z][a-z0-9+.-]*:/i.test(raw) && /\./.test(raw)) raw = "https://" + raw;   // "example.com/page" works too
+  try { page = new URL(raw); if (!/^https?:$/.test(page.protocol)) throw 0; } catch (_) { urlMsg("That is not a web address. Paste the page's address, for example https://example.com/installer.", "small err"); return; }
+  if (/\.fwsc$/i.test(page.pathname)) { await useUrl(page); return; }
+  urlMsg(`Reading ${page.host}…`);
+  let text;
+  try {
+    const r = await fetch(page.href);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`.trim());
+    text = await r.text();
+  } catch (e) { urlMsg(e instanceof TypeError ? blocked : `Could not read that page: ${e.message}.`, "small err"); return; }
+  const found = new Map();
+  for (const m of text.replace(/\\\//g, "/").matchAll(FWSC)) {
+    try { const u = new URL(m[0], page); if (/^https?:$/.test(u.protocol)) found.set(u.href, u); } catch (_) { /* not an address */ }
+  }
+  // drop what is not a file name (a bare ".fwsc" in a script) and what the site says does not exist
+  for (const [k, u] of found) if ((u.pathname.split("/").pop() || "").length <= 5) found.delete(k);
+  await Promise.all([...found].map(async ([k, u]) => {
+    try { const r = await fetch(u.href, { method: "HEAD" }); if (r.status === 404 || r.status === 410) found.delete(k); } catch (_) { /* cannot tell: keep it */ }
+  }));
+  if (!found.size) { urlMsg(`No .fwsc files appear in that page's source. Pages that build their list with a separate script are not followed; download the file and drop it above.`, "small err"); return; }
+  if (found.size === 1) { await useUrl([...found.values()][0]); return; }
+  urlMsg(`${found.size} firmware files appear in that page. Pick one:`);
+  $("url-results").replaceChildren(...[...found.values()].map((u) => {
+    const b = make("button", { className: "small", type: "button", textContent: "Use this file" });
+    b.addEventListener("click", () => useUrl(u));
+    return make("li", {}, make("span", { className: "dname", textContent: decodeURIComponent(u.pathname.split("/").pop()) }), make("span", { className: "meta", textContent: u.host + u.pathname.replace(/[^/]*$/, "") }), b);
+  }));
+});
 const drop = $("drop");
 for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
 for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });

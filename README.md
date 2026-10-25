@@ -18,6 +18,9 @@ If your firmware's own updater, or M-VAVE's, works for you, use that instead.
 - Reads any `.fwsc` in the browser (nothing is uploaded), checks its CRCs and shows its identity and
   SHA-256. Only the unmodified official V15 is recognised by hash; anything else is labelled, and a
   file of unknown origin needs a confirmation before it can be installed.
+- Can find the file for you: paste the address of a page that offers firmware, and the browser reads that page itself,
+  lists the `.fwsc` files in its source (or loads the one it finds). It works only for sites that allow other pages to
+  read them; for the rest it says so and you download the file and drop it in.
 - Lists every MIDI port. Ports with a usual FM-1 name are asked who they are; any other port is sent
   nothing until you press **Try this port** on it.
 - Lets you keep your own port names, so the page finds your FM-1 by itself next time (stored in
