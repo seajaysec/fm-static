@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.35";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.35";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.35";
-import { knownFirmware, protocolFor, FAMILY_NAME, WHERE, backupName, parseBackupName, verdict } from "./backup.js?v=2026-10-25.35";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.36";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.36";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.36";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.35";
+const VERSION = "2026-10-25.36";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -486,7 +485,7 @@ async function connect() {
   applyNames();
   let t = null;
   state.access.onstatechange = () => { clearTimeout(t); t = setTimeout(() => { if (!state.busy) scan(); }, 700); };
-  $("connect-row").hidden = true; $("top-connect").hidden = true; $("tabs").hidden = false;
+  $("connect-row").hidden = true;
   $("st-dev").hidden = false;
   await scan();
 }
@@ -502,7 +501,7 @@ async function scan() {
     state.devices = [...found, ...alive];
     if (!state.devices.some((d) => d.name === state.selected)) state.selected = state.devices[0]?.name ?? null;
     renderDevices();
-  } finally { state.scanning = false; refresh(); renderBackup(); }
+  } finally { state.scanning = false; refresh(); }
 }
 
 function renderDevices() {
@@ -774,113 +773,6 @@ $("go").addEventListener("click", () => install());
 $("restore-go").addEventListener("click", () => {
   const src = startupSource(selectedDevice(), state.pkg);
   if (src && $("risk").checked) install({ at: state.pkg.flashOff, bytes: src.d.startup });
-});
-
-// ------------------------------------------------------- back up & restore ---
-// Not part of the install chain: a tab of its own. Backs up what the firmware keeps, by fm1-base's backup protocol, for the
-// firmwares src/backup.js knows the four constants of; for any other family it says where that firmware's saves are kept.
-const bk = { image: null, name: "" };
-const bkFamily = (id) => (id.open ? "open" : id.version <= 19 ? "mvave" : id.version < 700 ? "baudgirl" : "felucca");
-const bkSay = (s, cls = "") => { const e = $("bk-status"); e.textContent = s; e.className = cls; };
-
-function showTab(which) {
-  const inst = which === "install";
-  $("tab-install").hidden = !inst; $("tab-backup").hidden = inst;
-  $("tab-install-b").setAttribute("aria-selected", String(inst)); $("tab-backup-b").setAttribute("aria-selected", String(!inst));
-  if (!inst) renderBackup();
-}
-$("tab-install-b").addEventListener("click", () => showTab("install"));
-$("tab-backup-b").addEventListener("click", () => showTab("backup"));
-
-$("connect-top").addEventListener("click", connect);
-
-function renderBackup() {
-  if ($("tab-backup").hidden) return;
-  $("bk-body").hidden = !state.up;
-  if (!state.up) return;
-  const dev = selectedDevice();
-  const route = $("bk-route"); route.replaceChildren();
-  const row = (st, plate, title, text) => {
-    const li = make("li", { className: "cp" }, make("span", { className: "plate" }, make("span", { textContent: plate })),
-      make("div", {}, make("b", { textContent: title }), make("p", { textContent: text })));
-    li.dataset.state = st; route.append(li);
-  };
-  $("bk-actions").hidden = true;
-  if (!dev) { row("idle", "WAITING", "No FM-1 selected", "Plug it in; the page asks each usual FM-1 port who it is. If yours is under another name, pick it on the Install tab (MIDI ports and names), then come back."); return; }
-  if (IS_OTA(dev.id)) { row("info", "SEEN", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish it on the Install tab; there is nothing to back up from the update loader.`); return; }
-  const fam = bkFamily(dev.id);
-  row("go", "CLEAR", `${dev.name} answered`, `${dev.id.text}: ${FAMILY_NAME[fam]}.`);
-  const fw = knownFirmware(dev.id.text);
-  if (!fw) { row("info", "SEEN", "This page cannot read this firmware's saves", WHERE[fam]); return; }
-  row("go", "CLEAR", `${fw.name} keeps ${fw.keeps}`, `${fw.name} includes the backup code this page speaks (fm1-base's). An older ${fw.name} without it will not answer, and the page will say so.`);
-  $("bk-what").textContent = `Reads ${fw.keeps} from the FM-1 and saves it as a file. Nothing on the FM-1 changes. The file name carries the firmware, its family and its version: ${backupName(fw, fam, dev.id.text)}`;
-  $("bk-actions").hidden = false;
-  checkRestoreFile();
-}
-
-async function bkLink(dev) {
-  state.up.select(dev.name);
-  const found = await state.up.find((id) => !IS_OTA(id));
-  if (!found) throw Object.assign(new Error("The FM-1 did not answer. Check the cable and close other apps that use MIDI."), { code: "notfound" });
-  return found;
-}
-
-$("bk-go").addEventListener("click", async () => {
-  const dev = selectedDevice(); const fw = dev && knownFirmware(dev.id.text);
-  if (!fw || state.busy) return;
-  state.busy = true; $("bk-go").disabled = true; bkSay("Asking the FM-1 for its saves…");
-  let found;
-  try {
-    const PB = await protocolFor(fw);
-    found = await bkLink(dev);
-    const r = await PB.backup(found.link, (n) => bkSay(`Receiving… ${n.toLocaleString("en")} bytes`));
-    const name = backupName(fw, bkFamily(dev.id), dev.id.text);
-    const { objs, flags } = PB.parse(r.image);
-    const a = make("a", { href: URL.createObjectURL(new Blob([r.image], { type: "application/octet-stream" })), download: name });
-    document.body.append(a); a.click(); a.remove();
-    bkSay(`Saved ${name}: ${PB.summary(objs)}${flags & 1 ? ". It was playing when the backup was taken." : "."}`, "ok");
-  } catch (e) { bkSay(e.message, "err"); }
-  finally { try { found && found.link.close(); } catch (_) {} state.busy = false; $("bk-go").disabled = false; setTimeout(scan, 1000); }
-});
-
-let bkFile = null;   // { name, bytes }
-$("bk-file").addEventListener("change", async () => {
-  const f = $("bk-file").files[0];
-  bkFile = f ? { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) } : null;
-  checkRestoreFile();
-});
-
-async function checkRestoreFile() {
-  const box = $("bk-verdict"), btn = $("bk-restore");
-  btn.disabled = true; box.hidden = !bkFile;
-  const dev = selectedDevice(); const fw = dev && knownFirmware(dev.id.text);
-  if (!bkFile || !fw) return;
-  let formatOk = false, summaryText = "";
-  try { const PB = await protocolFor(fw); const p = PB.parse(bkFile.bytes); formatOk = true; summaryText = PB.summary(p.objs); }
-  catch (e) { summaryText = e.message; }
-  const v = verdict({ file: parseBackupName(bkFile.name), formatOk, fw, family: bkFamily(dev.id), identity: dev.id.text });
-  box.replaceChildren(make("p", { className: "bk-" + v.level }, make("b", { textContent: bkFile.name }), " ", formatOk ? `(${summaryText}) ` : "", v.text), ...(formatOk ? [] : [make("p", { className: "small", textContent: summaryText })]));
-  btn.disabled = !formatOk || state.busy;
-}
-
-$("bk-restore").addEventListener("click", async () => {
-  const dev = selectedDevice(); const fw = dev && knownFirmware(dev.id.text);
-  if (!fw || !bkFile || state.busy) return;
-  state.busy = true; $("bk-restore").disabled = true; bkSay("Sending the restore request…");
-  let found;
-  try {
-    const PB = await protocolFor(fw);
-    found = await bkLink(dev);
-    const code = await PB.restore(found.link, bkFile.bytes, (what, pct) => {
-      if (what === "ask") bkSay(`Look at the FM-1: it asks “RESTORE FROM USB?”. Press SEL to restore, HOME to cancel.`);
-      else if (what === "progress") bkSay(`Sending… ${Math.round(pct)}%`);
-    });
-    if (code === 0) bkSay(`Restored. ${fw.name} has the saves from ${bkFile.name}.`, "ok");
-    else if (code === PB.PLAYING) bkSay(`${fw.name} is playing, so it did not restore. Stop playback and try again. Nothing changed.`, "err");
-    else if (code === PB.DECLINED) bkSay("HOME was pressed on the FM-1: nothing changed.", "");
-    else bkSay(`${fw.name} stopped at ${PB.ERRORS[code] || "code " + code}. Nothing was reported as changed; check the FM-1.`, "err");
-  } catch (e) { bkSay(e.message, "err"); }
-  finally { try { found && found.link.close(); } catch (_) {} state.busy = false; setTimeout(scan, 1000); checkRestoreFile(); }
 });
 
 refresh();

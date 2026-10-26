@@ -11,7 +11,7 @@
 //   - what step 1 did when it stopped, so the page can say which check refused
 // fm1-base's find() only probes ports whose name looks like an FM-1's. To let it probe the ports we choose, it is given a
 // view of the MIDI ports that holds only those, under a name its own test accepts.
-import { Updater as Base, unpack7 } from "../vendor/fm1-base/fm1ota.js?v=2026-10-25.35";
+import { Updater as Base, unpack7 } from "../vendor/fm1-base/fm1ota.js?v=2026-10-25.36";
 
 export const IS_OTA = (id) => /^ota-/i.test(id.model);
 // port names probed without asking (substrings, any case); any other port only after the user picks it

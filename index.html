@@ -30,13 +30,6 @@
     </details>
   </section>
 
-  <p id="top-connect" class="next"><button id="connect-top">Connect FM-1</button> <span class="small">Install firmware, or back up and restore what it keeps. Asks the browser for MIDI access.</span></p>
-  <nav id="tabs" class="tabs" hidden role="tablist" aria-label="What to do">
-    <button id="tab-install-b" role="tab" aria-selected="true" aria-controls="tab-install">Install firmware</button>
-    <button id="tab-backup-b" role="tab" aria-selected="false" aria-controls="tab-backup">Back up &amp; restore</button>
-  </nav>
-  <div id="tab-install" role="tabpanel">
-
   <section class="stage" id="st-file" data-state="now">
     <h2>Firmware file</h2>
     <p class="lead dim">Any <code>.fwsc</code>. It is read in your browser and goes nowhere else.</p>
@@ -201,32 +194,9 @@
     <p><button id="sdlg-close" class="small" type="button">Close</button></p>
   </dialog>
 
-  </div>
-
-  <div id="tab-backup" role="tabpanel" hidden>
-    <section class="stage" id="st-backup" data-state="now">
-      <h2>Back up &amp; restore</h2>
-      <p class="lead dim">Separate from installing: do it before, after, or on its own. A backup is what the firmware on the FM-1 keeps (projects, presets, banks), not a copy of the firmware itself.</p>
-      <div id="bk-body" hidden>
-        <ol id="bk-route" class="route"></ol>
-        <div id="bk-actions" hidden>
-          <h3>Back up</h3>
-          <p id="bk-what" class="small"></p>
-          <p><button id="bk-go">Back up and download</button></p>
-          <h3>Restore</h3>
-          <p class="small">Restoring writes to the FM-1. Different firmwares keep their saves in different formats, so this page can say whether a file looks like it belongs to the FM-1 you connected, but cannot promise a restore from another firmware or version will come out as you expect. The FM-1 asks for confirmation on its own buttons before anything changes.</p>
-          <label id="bk-drop" class="plainpick">Choose a backup file <input id="bk-file" type="file" aria-label="Backup file"></label>
-          <div id="bk-verdict" hidden></div>
-          <p><button id="bk-restore" disabled>Restore this backup</button></p>
-        </div>
-        <p id="bk-status" role="status"></p>
-      </div>
-    </section>
-  </div>
-
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.35</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.36</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.35"></script>
+<script type="module" src="src/app.js?v=2026-10-25.36"></script>
 </body>
 </html>
