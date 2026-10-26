@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.7">
+<link rel="stylesheet" href="style.css?v=2026-10-26.8">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -20,38 +20,37 @@
 <div class="hazard" aria-hidden="true"></div>
 
 <main class="wrap">
+  <div class="workspace-top">
   <section class="why">
     <p>fm-static installs a <code>.fwsc</code> firmware file on an M-VAVE FM-1. Use it when you're finding it hard to get your
       FM-1 to flash through other means. Bring a <code>.fwsc</code> file and follow the process through to the end.</p>
     <p class="small">It is made for the M-VAVE FM-1. The SMK-37 may work; that is completely untested. It checks that the FM-1 comes back running what you installed, not how it sounds.</p>
     <details class="small v15note"><summary>Do I need official V15 first?</summary>
       <p>No. Some installers and firmwares caution against installing anything else until you have gone through M-VAVE's official V15. We haven't found a strong reason for that: this page installs any valid package over whatever firmware answers it. The two refusals seen so far (a package bigger than V15's, and a startup-code mismatch) can be got around by installing through a firmware that accepts the package (M-VAVE's V16, or any firmware on a recent fm1-base), or by the restore step, which has not been tried on an FM-1 yet.</p>
-      <p>If you would like to go through V15 anyway, here it is: the original V15 is inside M-VAVE's Workbench download. Paste <code>https://open.m-vave.com/fm1-workbench</code> in the address box below, save the file it points to, then drop it here: the page finds V15 inside it.</p>
+      <p>If you would like to go through V15 anyway, here it is: the original V15 is inside M-VAVE's Workbench download. Paste <code>https://open.m-vave.com/fm1-workbench</code> in the Firmware file address box, save the file it points to, then choose it in Firmware file: the page finds V15 inside it.</p>
     </details>
   </section>
 
-  <div class="mode-tabs" role="tablist" aria-label="Flasher tools">
-    <button id="tab-flash" type="button" role="tab" aria-selected="true" aria-controls="panel-flash">Flash</button>
-    <button id="tab-advanced" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" tabindex="-1">Layout Analysis</button>
-    <button id="tab-recovery" type="button" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1">Backup &amp; Recovery</button>
-    <button id="tab-about" type="button" role="tab" aria-selected="false" aria-controls="panel-about" tabindex="-1">About</button>
-  </div>
-  <div id="panel-flash" role="tabpanel" aria-labelledby="tab-flash">
-  <section class="stage" id="st-file" data-state="now">
-    <h2>Firmware file</h2>
-    <p class="lead dim">Any <code>.fwsc</code>. It is read in your browser and goes nowhere else.</p>
+  <section class="stage" id="st-file" data-state="now" aria-labelledby="firmware-title">
+    <h2 id="firmware-title">Firmware file</h2>
+    <p class="lead dim">Choose once for Flash and Layout Analysis. Files are inspected locally; only Flash sends firmware to the device.</p>
+    <fieldset id="firmware-inputs" aria-label="Choose firmware">
     <label id="drop" for="file">
-      <span class="drop-main">Drop a <code>.fwsc</code> file here, or click to choose one<br><span class="small">A saved web page that carries firmware inside it works too (M-VAVE's Workbench holds the Open firmware).</span></span>
+      <span class="drop-main">Drop a .fwsc or saved updater page<br><span class="small">Or click to choose a file</span></span>
       <span class="drop-sub" id="drop-name">No file chosen</span>
-      <input id="file" type="file" accept=".fwsc,.html,.htm" aria-label="Firmware file">
+      <input id="file" type="file" accept=".fwsc,.html,.htm" aria-label="Firmware file" aria-describedby="file-msg">
     </label>
     <form id="url-form" class="urlform" novalidate>
-      <label for="url">Or paste the address of a page, or a GitHub repository, that offers the firmware</label>
+      <label for="url">Or find firmware by URL</label>
       <span class="urlrow"><input id="url" type="text" inputmode="url" placeholder="https://" spellcheck="false" autocomplete="off"><button class="small" type="submit">Find files</button></span>
     </form>
     <p id="url-msg" class="small" role="status" hidden></p>
     <ul id="url-results" class="plain"></ul>
+    </fieldset>
+    <p id="file-msg" class="small" role="status">No firmware selected.</p>
     <div id="fileinfo" hidden>
+      <p id="file-selection" class="selected-file"></p>
+      <details id="file-details"><summary>Package details and checks</summary>
       <dl>
         <dt>File</dt><dd id="f-name"></dd>
         <dt>Identity</dt><dd id="f-id"></dd>
@@ -62,10 +61,26 @@
         <dt>Loader</dt><dd id="f-loader"></dd>
       </dl>
       <ol id="route-file" class="route"></ol>
+      </details>
       <div id="install-analysis-warning" role="status"></div>
+    </div>
+  </section>
+
+  </div>
+
+  <div class="mode-tabs" role="tablist" aria-label="Flasher tools">
+    <button id="tab-flash" type="button" role="tab" aria-selected="true" aria-controls="panel-flash">Flash</button>
+    <button id="tab-advanced" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" tabindex="-1">Layout Analysis</button>
+    <button id="tab-recovery" type="button" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1">Backup &amp; Recovery</button>
+    <button id="tab-about" type="button" role="tab" aria-selected="false" aria-controls="panel-about" tabindex="-1">About</button>
+  </div>
+  <div id="panel-flash" role="tabpanel" aria-labelledby="tab-flash">
+  <section class="stage" id="st-start">
+    <h2>Flash firmware</h2>
+    <p id="flash-selection">Choose firmware in the shared Firmware file panel to begin.</p>
       <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from a source I trust and accept the risk of installing it.</label></p>
       <p id="connect-row" class="next"><button id="connect">Connect your FM-1</button> <span class="small">Next: this page checks the FM-1 against the file.</span></p>
-    </div>
+    <p id="status" role="status"></p>
   </section>
 
   <section class="stage" id="st-dev" hidden>
@@ -164,7 +179,6 @@
           </li>
         </ol>
       </div>
-      <p id="status" role="status"></p>
       <p class="small"><a href="#desktop-recovery">If these steps do not work: backup and recovery tools</a></p>
       <details id="logbox" hidden><summary>Log</summary><pre id="log"></pre></details>
 
@@ -214,10 +228,7 @@
   <section id="panel-advanced" class="stage" role="tabpanel" aria-labelledby="tab-advanced" hidden>
     <h2>Layout Analysis</h2>
     <p>Inspect firmware, a flash backup, or both. Files stay in your browser. This tab does not connect to the FM-1, create backups or restore them.</p>
-    <p id="analysis-source" class="small" role="status">Choose a firmware file here, or select one on Flash.</p>
-    <p><label for="analysis-file">Firmware to inspect (.fwsc)</label><br><input id="analysis-file" type="file" accept=".fwsc" aria-describedby="analysis-msg"></p>
-    <p id="analysis-msg" class="small">Choosing a file here does not change the firmware selected on Flash.</p>
-    <button id="analysis-clear" class="small" type="button" hidden>Use the Flash selection</button>
+    <p id="analysis-source" class="small" role="status">Choose firmware in the shared Firmware file panel, or inspect a backup on its own.</p>
       <div id="flash-plan" class="flash-inspection" hidden>
         <h3>Expected firmware writes</h3>
         <div id="flash-map"></div>
@@ -234,7 +245,7 @@
 
     <details id="backup-inspection" class="flash-inspection">
       <summary>Inspect a flash backup</summary>
-      <p class="after">Open a raw 1 MiB <code>.bin</code> backup to inspect it or compare it with the firmware selected here. Everything stays in this browser. This does not create a backup or restore one to the FM-1.</p>
+      <p class="after">Open a raw 1 MiB <code>.bin</code> backup to inspect it or compare it with the shared firmware selection. Everything stays in this browser. This does not create a backup or restore one to the FM-1.</p>
       <p class="small">Need to create a full-flash backup? <a href="https://github.com/jvitkauskas/m-flasher" target="_blank" rel="noopener">Use M-Flasher</a>, then open its .bin here. <a href="#desktop-recovery">See all backup and recovery routes.</a></p>
       <p><label for="backup-file">Flash backup file</label><br><input id="backup-file" type="file" accept=".bin" aria-describedby="backup-msg"></p>
       <p id="backup-msg" class="small" role="status">No backup loaded.</p>
@@ -245,7 +256,7 @@
     <div class="flash-inspection compact-diagram">
       <h3>How layout analysis works</h3>
       <ol class="workflow analysis-workflow" aria-label="Layout analysis workflow">
-        <li><div class="wf-node"><span class="wf-number" aria-hidden="true">1</span><h4>Choose files</h4><p>Firmware, a raw backup, or both. The Flash selection stays separate.</p></div></li>
+        <li><div class="wf-node"><span class="wf-number" aria-hidden="true">1</span><h4>Choose files</h4><p>Choose firmware in the shared panel, a raw backup here, or both.</p></div></li>
         <li><div class="wf-node"><span class="wf-number" aria-hidden="true">2</span><h4>Read the layout</h4><p>Check file integrity and show the regions declared in the tables.</p></div></li>
         <li><div class="wf-node"><span class="wf-number" aria-hidden="true">3</span><h4>Compare</h4><p>With both files, compare layouts, bytes and complete sectors.</p></div></li>
         <li><div class="wf-node"><span class="wf-number" aria-hidden="true">4</span><h4>Review findings</h4><p>No device connection. No flash writes. No backup restore.</p></div></li>
@@ -457,8 +468,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.7</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.8</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.7"></script>
+<script type="module" src="src/app.js?v=2026-10-26.8"></script>
 </body>
 </html>

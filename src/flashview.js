@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
-import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.7";
-import { sha256hex, inspect } from "./fm1pkg.js?v=2026-10-26.7";
+import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.8";
+import { sha256hex } from "./fm1pkg.js?v=2026-10-26.8";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -45,28 +45,6 @@ function map(plan) {
 
 export function setupFlashView() {
   let backup = null, selection = 0, current = null, previous = null;
-  let analysis = null, analysisSelection = 0;
-  $("analysis-file").addEventListener("change", async () => {
-    const file = $("analysis-file").files[0];
-    if (!file) return;
-    const ticket = ++analysisSelection, status = $("analysis-msg");
-    status.textContent = `Reading ${file.name}…`; status.className = "small";
-    try {
-      const pkg = await inspect(await file.arrayBuffer());
-      if (ticket !== analysisSelection) return;
-      pkg.name = file.name; analysis = pkg;
-      status.textContent = "Analysis only. The firmware selected on Flash has not changed.";
-    } catch (e) {
-      if (ticket !== analysisSelection) return;
-      status.textContent = `${file.name}: ${e.message} The previous analysis selection is unchanged.`; status.className = "small err";
-    }
-    previous = null; render();
-  });
-  $("analysis-clear").addEventListener("click", () => {
-    analysisSelection++; analysis = null; $("analysis-file").value = ""; previous = null;
-    $("analysis-msg").textContent = "Choosing a file here does not change the firmware selected on Flash.";
-    $("analysis-msg").className = "small"; render();
-  });
   const picker = $("backup-file"), msg = $("backup-msg");
   picker.addEventListener("change", async () => {
     const file = picker.files[0];
@@ -96,16 +74,14 @@ export function setupFlashView() {
   });
 
   function render() {
-    const { pkg: installPkg = null, ...installOptions } = current || {};
-    const pkg = analysis || installPkg, options = analysis ? {} : installOptions;
-    const key = [pkg, options.wipe, options.boot, options.stock, backup, installPkg];
+    const { pkg = null, ...options } = current || {};
+    const key = [pkg, options.wipe, options.boot, options.stock, backup];
     if (previous && key.every((v, i) => v === previous[i])) return;
     previous = key;
-    $("analysis-clear").hidden = !analysis;
     $("analysis-source").textContent = pkg
-      ? `${analysis ? "Analysis file" : "From Flash"}: ${pkg.name} · ${pkg.product}.${analysis ? " Preview uses a normal firmware install, without Flash's optional wipe or bootloader." : " Preview follows the options selected on Flash."}`
-      : "Choose a firmware file here, or select one on Flash. A backup can also be inspected on its own.";
-    $("install-analysis-warning").replaceChildren(...(installPkg ? layoutOf(installPkg).warnings : []).map((w) => el("p", w, "warn")));
+      ? `Shared firmware: ${pkg.name} · ${pkg.product}. Preview follows the options selected on Flash.`
+      : "Choose firmware in the shared Firmware file panel, or inspect a backup on its own.";
+    $("install-analysis-warning").replaceChildren(...(pkg ? layoutOf(pkg).warnings : []).map((w) => el("p", w, "warn")));
     const layout = pkg && layoutOf(pkg), plan = pkg && writePlan(pkg, options);
     $("flash-plan").hidden = !pkg;
     if (pkg) {
@@ -146,7 +122,7 @@ export function setupFlashView() {
         info.append(el("p", "An erased or different sector alone does not prove a failed update; padding, another firmware or saved data can also explain it.", "small"));
       }
       info.append(el("p", "This compares two files, not the live FM-1. It excludes staging and cleanup writes and does not predict which sectors the loader will skip.", "small"));
-    } else info.append(el("p", "Choose a firmware package here or on Flash to compare its layout and expected write bytes with this backup."));
+    } else info.append(el("p", "Choose firmware in the shared Firmware file panel to compare its layout and expected write bytes with this backup."));
     const details = el("details"), summary = el("summary", "Backup region table"); details.append(summary);
     details.append(backup.regions.length ? table(backup.regions, plan) : el("p", "No validated physical ranges could be read from the file tables."));
     info.append(details);

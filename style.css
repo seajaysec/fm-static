@@ -90,7 +90,7 @@ a:hover { text-decoration-thickness: 2px; }
 .mode-tabs { display: flex; gap: 6px; margin-top: 22px; }
 .mode-tabs [role="tab"] { min-height: 44px; background: var(--panel); color: var(--ink); }
 .mode-tabs [aria-selected="true"] { background: var(--orange); color: var(--on-orange); }
-#analysis-source, #analysis-msg { overflow-wrap: anywhere; }
+#analysis-source { overflow-wrap: anywhere; }
 .lead { margin-bottom: 14px; }
 .after { margin-top: 14px; }
 
@@ -320,3 +320,19 @@ dialog h3 { margin-top: 0; }
 .comparison-legend { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 24px 0 12px; font-size: 15px; }
 .comparison-legend > span, .tool-key { display: inline-flex; align-items: center; gap: 8px; }
 .tool-key { margin: 4px 12px 4px 0; white-space: nowrap; }
+
+/* One firmware selection above the tools, with the picker in the upper right. */
+.workspace-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 32px; padding-top: 20px; }
+.workspace-top > .why { padding-top: 4px; }
+.workspace-top > .stage { margin-top: 0; }
+#firmware-inputs { min-width: 0; margin: 0; padding: 0; border: 0; }
+#firmware-inputs:disabled #drop { cursor: not-allowed; }
+#file-msg { margin: 12px 0 0; overflow-wrap: anywhere; }
+.selected-file { margin: 12px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+#file-details .cp { grid-template-columns: 1fr; gap: 6px; }
+#file-details .plate { justify-self: start; padding-inline: 8px; }
+#flash-selection { overflow-wrap: anywhere; }
+#st-start #status:empty { display: none; }
+@media (max-width: 900px) {
+  .workspace-top { grid-template-columns: 1fr; gap: 20px; }
+}

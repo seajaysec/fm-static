@@ -43,6 +43,8 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     for (const mode of ['flash', 'advanced', 'recovery', 'about']) {
       await page.locator('#tab-' + mode).click();
+      assert.equal(await page.locator('#st-file').isVisible(), true, 'shared picker visible on ' + mode);
+      assert.equal(await page.locator('#connect').isVisible(), false, 'no device connection before a package is selected');
       const flow = mode === 'flash' ? page.locator('#st-map .workflow') : mode === 'advanced' ? page.locator('.analysis-workflow') : null;
       if (flow) assert.equal(await flow.locator(':scope > li').count(), 4);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, mode + ' overflow at ' + width);
@@ -101,29 +103,90 @@ try {
   await page.waitForFunction(() => document.querySelector("#backup-info").textContent.includes("SHA-256"));
   assert.equal(await page.evaluate(() => window.midiCalls), 0);
   assert.match(await page.locator("#backup-msg").innerText(), /V15-style/);
-  await page.locator("#analysis-file").setInputFiles(nextPath);
-  await page.waitForFunction(() => document.querySelector("#analysis-source").textContent.includes("FM-1_016"));
-  assert.equal(await page.locator("#f-id").textContent(), "", "analysis does not select install firmware");
+  assert.equal(await page.locator('#st-file').evaluate(e => e.closest('[role="tabpanel"]')), null);
+  assert.equal(await page.locator('#analysis-file').count(), 0);
+  await page.locator('#file').setInputFiles(nextPath);
+  await page.waitForFunction(() => document.querySelector('#analysis-source').textContent.includes('FM-1_016'));
+  assert.equal(await page.locator('#f-id').textContent(), 'FM-1_016', 'analysis uses shared firmware');
   assert.equal(await page.evaluate(() => window.midiCalls), 0);
-  await page.locator("#analysis-clear").click();
-  await page.locator("#tab-flash").click();
-  await page.locator("#file").setInputFiles(nextPath);
-  await page.waitForFunction(() => document.querySelector("#f-id").textContent === "FM-1_016");
-  await page.locator("#tab-advanced").click();
-  await page.locator("#flash-details > summary").click();
-  assert.match(await page.locator("#flash-layout").innerText(), /V16-style/);
-  assert.match(await page.locator("#flash-regions").innerText(), /DX7.bin/);
-  assert.match(await page.locator("#backup-info").innerText(), /Data-region addresses differ/);
-  assert.match(await page.locator("#flash-ranges").innerText(), /0xA9000/);
-  await page.locator("#analysis-file").setInputFiles(oldPath);
-  await page.waitForFunction(() => document.querySelector("#analysis-source").textContent.includes("FM-1_015"));
-  assert.equal(await page.locator("#f-id").textContent(), "FM-1_016", "analysis leaves existing install selection alone");
-  await page.locator("#analysis-file").setInputFiles({ name: "invalid.fwsc", mimeType: "application/octet-stream", buffer: Buffer.alloc(3) });
-  await page.waitForFunction(() => document.querySelector("#analysis-msg").classList.contains("err"));
-  assert.match(await page.locator("#analysis-source").innerText(), /FM-1_015/);
-  await page.locator("#analysis-clear").click();
-  assert.match(await page.locator("#analysis-source").innerText(), /From Flash:.*FM-1_016/);
-  await page.locator("#tab-flash").click();
+  await page.locator('#flash-details > summary').click();
+  assert.match(await page.locator('#flash-layout').innerText(), /V16-style/);
+  assert.match(await page.locator('#flash-regions').innerText(), /DX7.bin/);
+  assert.match(await page.locator('#backup-info').innerText(), /Data-region addresses differ/);
+  assert.match(await page.locator('#flash-ranges').innerText(), /0xA9000/);
+  await page.locator('#file').setInputFiles(oldPath);
+  await page.waitForFunction(() => document.querySelector('#analysis-source').textContent.includes('FM-1_015'));
+  await page.locator('#tab-flash').click();
+  assert.match(await page.locator('#flash-selection').innerText(), /FM-1_015/);
+  assert.equal(await page.locator('#f-id').textContent(), 'FM-1_015', 'shared changes reach Flash');
+  await page.locator('#tab-advanced').click();
+  await page.locator('#file').setInputFiles({ name: 'invalid.fwsc', mimeType: 'application/octet-stream', buffer: Buffer.alloc(3) });
+  await page.waitForFunction(() => document.querySelector('#file-msg').classList.contains('err'));
+  assert.equal(await page.locator('#file-msg').isVisible(), true);
+  assert.match(await page.locator('#analysis-source').innerText(), /FM-1_015/);
+  assert.equal(await page.locator('#f-id').textContent(), 'FM-1_015', 'invalid replacement preserves shared selection');
+  await page.locator('#file').setInputFiles(nextPath);
+  await page.waitForFunction(() => document.querySelector('#analysis-source').textContent.includes('FM-1_016'));
+  assert.equal(await page.evaluate(() => window.midiCalls), 0);
+  // A saved updater page uses the same shared selection without MIDI access.
+  await page.locator('#file').setInputFiles({name:'saved-updater.html',mimeType:'text/html',buffer:Buffer.from('<script type="application/octet-stream">'+readFileSync(oldPath).toString('base64')+'</script>')});
+  await page.waitForFunction(() => document.querySelector('#f-id').textContent === 'FM-1_015');
+  assert.match(await page.locator('#analysis-source').innerText(), /FM-1_015/);
+  // Hold old discoveries until a newer local choice is committed.
+  for (const kind of ['page', 'github', 'workbench']) {
+    let release, started, requests = 0;
+    const gate = new Promise(r => release = r), began = new Promise(r => started = r);
+    const url = kind === 'page' ? 'https://firmware.example/installer' : kind === 'github' ? 'https://github.com/test/shared-picker' : 'https://open.m-vave.com/fm1-workbench';
+    const pattern = kind === 'page' ? 'https://firmware.example/**' : kind === 'github' ? 'https://api.github.com/repos/test/shared-picker**' : 'https://api.github.com/repos/m-vave/fm1_open/releases/latest';
+    await page.route(pattern, async route => {
+      requests++;
+      if(requests === 1) { started(); await gate; }
+      const path = new URL(route.request().url()).pathname;
+      const body = kind === 'page' ? '<a href="/old.fwsc">old</a>' : kind === 'workbench' ? {assets:[]} : path.endsWith('/shared-picker') ? {name:'shared-picker',default_branch:'main'} : path.includes('/git/trees/') ? {tree:[{type:'blob',path:'old.fwsc'}]} : [];
+      await route.fulfill({contentType:kind==='page'?'text/html':'application/json',body:typeof body==='string'?body:JSON.stringify(body)});
+    });
+    await page.locator('#url').fill(url);
+    await page.locator('#url-form button').click(); await began;
+    assert.equal(await page.locator('#connect').isDisabled(), true, 'lookup blocks connection until settled');
+    await page.locator('#file').setInputFiles([]);
+    await page.locator('#file').setInputFiles(nextPath);
+    await page.waitForFunction(() => document.querySelector('#f-id').textContent === 'FM-1_016' && document.querySelector('#file-msg').textContent.startsWith('Ready'));
+    release(); await page.waitForLoadState('networkidle');
+    assert.equal(requests, 1, 'stale '+kind+' lookup stops before further requests');
+    assert.equal(await page.locator('#f-id').textContent(), 'FM-1_016');
+    assert.equal(await page.locator('#url-msg').isVisible(), false, 'stale '+kind+' lookup cannot overwrite shared feedback: '+await page.locator('#url-msg').textContent());
+    await page.unroute(pattern);
+  }
+  assert.equal(await page.evaluate(() => window.midiCalls), 0);
+  let failedDownloads = 0;
+  await page.route('https://firmware.example/retry**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if(path === '/retry') return route.fulfill({contentType:'text/html',body:'<a href="/retry-bad.fwsc">A</a><a href="/retry-good.fwsc">B</a>'});
+    if(route.request().method() === 'HEAD') return route.fulfill({status:200});
+    if(path === '/retry-bad.fwsc') { failedDownloads++; return route.fulfill({status:500,body:'Failed'}); }
+    return route.fulfill({contentType:'application/octet-stream',body:readFileSync(nextPath)});
+  });
+  await page.locator('#url').fill('https://firmware.example/retry');
+  await page.locator('#url-form button').click();
+  await page.waitForFunction(() => document.querySelectorAll('#url-results button').length === 2);
+  await page.locator('#url-results button').first().click();
+  await page.waitForFunction(() => document.querySelector('#url-msg').classList.contains('err'));
+  await page.locator('#url-sort').selectOption('name');
+  await page.locator('#url-results button').first().click();
+  await page.waitForFunction(() => document.querySelector('#url-msg').classList.contains('err'));
+  assert.equal(failedDownloads, 2, 'failed download can be retried');
+  await page.locator('#url-results button').last().click();
+  await page.waitForFunction(() => document.querySelector('#file-selection').textContent.includes('retry-good.fwsc'));
+  assert.equal(await page.locator('#f-id').textContent(), 'FM-1_016', 'another result remains selectable after failure');
+  assert.equal(await page.evaluate(() => window.midiCalls), 0);
+  await page.unroute('https://firmware.example/retry**');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1100 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: '/tmp/fm-static-shared-firmware-' + width + '.png' });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator('#tab-flash').click();
   await page.locator("#trust").check(); await page.locator("#connect").click();
   await page.locator("#wipe").waitFor({ state: "visible" });
   await page.locator("#boot-check").click();

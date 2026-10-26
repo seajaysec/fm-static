@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.7";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.7";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.7";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.7";
-import { setupTabs } from "./tabs.js?v=2026-10-26.7";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.8";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.8";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.8";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.8";
+import { setupTabs } from "./tabs.js?v=2026-10-26.8";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.7";
+const VERSION = "2026-10-26.8";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -16,7 +16,7 @@ const updateFlashView = setupFlashView();
 const updateTabs = setupTabs();
 
 const state = {
-  pkg: null, access: null, up: null, devices: [], selected: null, busy: false, scanning: false, done: false,
+  pkg: null, access: null, up: null, devices: [], selected: null, busy: false, fileLoading: false, scanning: false, done: false,
   names: loadNames(),          // port names the user added
   tried: new Map(),            // port -> "no answer" after a manual try
   frozen: null,                // the device facts as they were when the install started
@@ -166,38 +166,44 @@ function stepOneRefusal(e, pkg) {
 
 // ---------------------------------------------------------------- firmware ---
 
-async function loadFile(file, source = "") {
-  state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; $("after").hidden = true;
-  $("wipe").checked = false;   // a wipe is chosen for one install, never carried over to the next file
-  $("bootl").checked = false; $("backup").checked = false;
-  $("fileinfo").hidden = true;
-  if (file) {
-    try {
-      const pkg = await inspect(await file.arrayBuffer());
-      pkg.name = file.name;
-      $("drop-name").textContent = file.name;
-      state.pkg = pkg;
-      if (source) provenance(pkg, source);
-      if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
-      if (pkg.kind === "stock" || (pkg.kind === "mvave" && !state.stock)) state.stock = pkg;
-      $("f-name").textContent = file.name;
-      $("f-source").textContent = source; $("f-source").hidden = $("f-source-t").hidden = !source;
-      $("f-id").textContent = pkg.product;
-      $("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
-      $("f-sha").replaceChildren(...pkg.sha256.match(/.{1,8}/g).map((g) => make("span", { textContent: g })));
-      $("f-kind").textContent = kindText[pkg.kind];
-      $("f-kind").className = unverified(pkg) ? "warn" : "";
-      $("f-loader").textContent = loaderText[pkg.loader];
-      $("trust-row").hidden = !unverified(pkg);
-      $("trust").checked = false;
-      $("fileinfo").hidden = false;
-      say("");
-    } catch (e) {
-      $("drop-name").textContent = "No file chosen";
-      say(`${file.name}: ${e.message}`, "err");
-    }
-  }
+let fileEpoch = 0;
+const currentFileRequest = (ticket) => ticket === fileEpoch && !state.busy;
+async function loadFile(file, source = "", ticket = ++fileEpoch) {
+  if (!file || state.busy) return;
+  state.fileLoading = true;
+  const msg = $("file-msg"); msg.className = "small"; msg.textContent = `Reading ${file.name}…`;
   refresh();
+  try {
+    const pkg = await inspect(await file.arrayBuffer());
+    if (ticket !== fileEpoch || state.busy) return;
+    pkg.name = file.name;
+    state.pkg = pkg; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null;
+    $("after").hidden = true;
+    $("wipe").checked = false; $("bootl").checked = false; $("backup").checked = false;
+    $("drop-name").textContent = file.name;
+    if (source) provenance(pkg, source);
+    if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
+    if (pkg.kind === "stock" || (pkg.kind === "mvave" && !state.stock)) state.stock = pkg;
+    $("f-name").textContent = file.name;
+    $("f-source").textContent = source; $("f-source").hidden = $("f-source-t").hidden = !source;
+    $("f-id").textContent = pkg.product;
+    $("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
+    $("f-sha").replaceChildren(...pkg.sha256.match(/.{1,8}/g).map((g) => make("span", { textContent: g })));
+    $("f-kind").textContent = kindText[pkg.kind];
+    $("f-kind").className = unverified(pkg) ? "warn" : "";
+    $("f-loader").textContent = loaderText[pkg.loader];
+    $("trust-row").hidden = !unverified(pkg); $("trust").checked = false;
+    $("fileinfo").hidden = false;
+    $("file-selection").textContent = `${pkg.product} · ${file.name}`;
+    msg.textContent = "Ready for Flash and Layout Analysis.";
+    say("");
+  } catch (e) {
+    if (ticket !== fileEpoch || state.busy) return;
+    msg.className = "small err";
+    msg.textContent = `${file.name}: ${e.message} ${state.pkg ? "The previous firmware selection is unchanged." : "No firmware selected."}`;
+  } finally {
+    if (ticket === fileEpoch) { state.fileLoading = false; refresh(); }
+  }
 }
 
 // A saved web page can carry firmware packages as base64 text (M-VAVE's Workbench holds the Open firmware and the original V15
@@ -215,10 +221,16 @@ async function embeddedPackages(text) {
 }
 
 async function pickFile(file) {
+  if (!file || state.busy) return;
+  const ticket = ++fileEpoch;
+  state.fileLoading = false; refresh();
   $("url-results").replaceChildren(); $("url-msg").hidden = true;
   if (file && /\.html?$/i.test(file.name)) {
+    state.fileLoading = true; refresh();
+    try {
     urlMsg(`Looking for firmware inside ${file.name}…`);
     const pkgs = await embeddedPackages(await file.text());
+    if (ticket !== fileEpoch || state.busy) return;
     if (!pkgs.length) { urlMsg(`No firmware package found inside ${file.name}.`, "small err"); return; }
     const use = (p) => loadFile(new File([p.bytes], `${p.product}.fwsc`), `inside ${file.name}`);
     if (pkgs.length === 1) { urlMsg(""); await use(pkgs[0]); return; }
@@ -228,9 +240,11 @@ async function pickFile(file) {
       b.addEventListener("click", () => { $("url-results").replaceChildren(); urlMsg(""); use(p); });
       return make("li", {}, make("span", { className: "dname", textContent: p.product }), make("span", { className: "meta", textContent: `${p.kib} KiB, inside the page` }), b);
     }));
+    } catch (e) { if (currentFileRequest(ticket)) urlMsg(`Could not read ${file.name}: ${e.message}`, "small err"); }
+    finally { if (ticket === fileEpoch) { state.fileLoading = false; refresh(); } }
     return;
   }
-  await loadFile(file);
+  await loadFile(file, "", ticket);
 }
 $("file").addEventListener("change", () => pickFile($("file").files[0]));
 
@@ -252,35 +266,43 @@ async function fetchBytes(url) {
   return buf;
 }
 
-async function useUrl(u) {
+async function useUrl(u, ticket = ++fileEpoch) {
+  if (!currentFileRequest(ticket)) return;
+  state.fileLoading = true; refresh();
   urlMsg(`Fetching ${u.pathname.split("/").pop()} from ${u.host}…`);
   try {
     const buf = await fetchBytes(u.href);
+    if (ticket !== fileEpoch || state.busy) return;
     const name = decodeURIComponent(u.pathname.split("/").pop() || "firmware.fwsc");
     urlMsg("");
     $("url-results").replaceChildren();
-    await loadFile(new File([buf], name), u.href);
-    if (state.pkg) $("drop-name").textContent = name;
-  } catch (e) { urlMsg(e instanceof TypeError ? blocked : `Could not fetch that file: ${e.message}.`, "small err"); }
+    await loadFile(new File([buf], name), u.href, ticket);
+  } catch (e) { if (ticket === fileEpoch) urlMsg(e instanceof TypeError ? blocked : `Could not fetch that file: ${e.message}.`, "small err"); }
+  finally { if (ticket === fileEpoch) { state.fileLoading = false; refresh(); } }
 }
 
 $("url-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
+  if (state.busy) return;
+  const ticket = ++fileEpoch;
+  state.fileLoading = true; refresh();
+  try {
   $("url-results").replaceChildren();
   let page;
   let raw = $("url").value.trim();
   if (raw && !/^[a-z][a-z0-9+.-]*:/i.test(raw) && /\./.test(raw)) raw = "https://" + raw;   // "example.com/page" works too
   try { page = new URL(raw); if (!/^https?:$/.test(page.protocol)) throw 0; } catch (_) { urlMsg("That is not a web address. Paste the page's address, for example https://example.com/installer.", "small err"); return; }
-  if (/\.fwsc$/i.test(page.pathname)) { await useUrl(page); return; }
-  if (await knownSource(page)) return;
-  if (page.hostname === "github.com" || page.hostname === "www.github.com") { await githubRepo(page); return; }
+  if (/\.fwsc$/i.test(page.pathname)) { await useUrl(page, ticket); return; }
+  if (await knownSource(page, ticket) || !currentFileRequest(ticket)) return;
+  if (page.hostname === "github.com" || page.hostname === "www.github.com") { await githubRepo(page, ticket); return; }
   urlMsg(`Reading ${page.host}…`);
   let text;
   try {
     const r = await fetch(page.href);
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`.trim());
     text = await r.text();
-  } catch (e) { urlMsg(e instanceof TypeError ? blocked : `Could not read that page: ${e.message}.`, "small err"); return; }
+  } catch (e) { if (currentFileRequest(ticket)) urlMsg(e instanceof TypeError ? blocked : `Could not read that page: ${e.message}.`, "small err"); return; }
+  if (!currentFileRequest(ticket)) return;
   const found = new Map();
   for (const m of text.replace(/\\\//g, "/").matchAll(FWSC)) {
     try { const u = new URL(m[0], page); if (/^https?:$/.test(u.protocol)) found.set(u.href, u); } catch (_) { /* not an address */ }
@@ -290,16 +312,19 @@ $("url-form").addEventListener("submit", async (ev) => {
   await Promise.all([...found].map(async ([k, u]) => {
     try { const r = await fetch(u.href, { method: "HEAD" }); if (r.status === 404 || r.status === 410) found.delete(k); } catch (_) { /* cannot tell: keep it */ }
   }));
+  if (!currentFileRequest(ticket)) return;
   if (!found.size) { urlMsg(`No .fwsc files appear in that page's source. Pages that build their list with a separate script are not followed; download the file and drop it above.`, "small err"); return; }
-  if (found.size === 1) { await useUrl([...found.values()][0]); return; }
-  showList([...found.values()]);
+  if (found.size === 1) { await useUrl([...found.values()][0], ticket); return; }
+  showList([...found.values()], [], ticket);
+  } finally { if (ticket === fileEpoch) { state.fileLoading = false; refresh(); } }
 });
 
 // ------------------------------------------------------ places we know ---
 // M-VAVE's Workbench page does not allow other pages to read it, but the same Workbench is a download on their GitHub releases, and
 // the Open firmware and the original V15 are inside it. Pasting the Workbench's address (or its repository's) leads there.
 const ref = (href, text) => make("a", { href, textContent: text, target: "_blank", rel: "noopener" });
-async function knownSource(page) {
+async function knownSource(page, ticket) {
+  if (!currentFileRequest(ticket)) return true;
   const isWorkbench = /(^|\.)open\.m-vave\.com$/i.test(page.hostname) ||
     (/(^|\.)github\.com$/i.test(page.hostname) && /^\/m-vave\/fm1_open(\/|$)/i.test(page.pathname));
   if (isWorkbench) {
@@ -308,6 +333,7 @@ async function knownSource(page) {
       const rel = await (await fetch("https://api.github.com/repos/m-vave/fm1_open/releases/latest")).json();
       asset = (rel.assets || []).find((a) => /Workbench\.html$/i.test(a.name)); tag = rel.tag_name || "";
     } catch (_) { /* offline or rate limited: the releases page is still the place */ }
+    if (!currentFileRequest(ticket)) return true;
     urlMsg("M-VAVE's Workbench page can't be read from here (their site doesn't allow it). The same Workbench is a download on their GitHub releases, and the Open firmware and the original V15 are inside it. Save the file, then drop it in the box above.");
     const link = Object.assign(ref(asset ? asset.browser_download_url : "https://github.com/m-vave/fm1_open/releases/latest", asset ? "Download" : "Open the releases"), { className: "dl" });
     $("url-results").replaceChildren(make("li", {},
@@ -355,11 +381,14 @@ async function provenance(pkg, source) {
 // files (default branch and gh-pages) load directly. Release downloads cannot be read by a web page (GitHub redirects
 // them to a host that does not allow it), so those are listed with a link to download them and drop them above.
 // The API allows 60 anonymous requests an hour per address; a lookup uses about five.
-async function githubRepo(page) {
+async function githubRepo(page, ticket) {
+  if (!currentFileRequest(ticket)) return;
   const [owner, repo] = page.pathname.split("/").filter(Boolean);
   if (!owner || !repo) { urlMsg("That GitHub address has no repository in it. Use https://github.com/owner/repo.", "small err"); return; }
   const api = async (path) => {
+    if (!currentFileRequest(ticket)) throw new Error("Superseded lookup");
     const r = await fetch(`https://api.github.com/repos/${owner}/${repo.replace(/\.git$/, "")}${path}`);
+    if (!currentFileRequest(ticket)) throw new Error("Superseded lookup");
     if (r.status === 403 || r.status === 429) throw new Error("GitHub's limit for anonymous lookups was reached; try again in an hour, or paste the address of a file in the repo");
     if (r.status === 404) throw new Error("no such repository, or it is private");
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`.trim());
@@ -386,11 +415,12 @@ async function githubRepo(page) {
     const rows = (await api("/releases?per_page=30")).flatMap((r) => r.assets.filter((a) => /\.fwsc$/i.test(a.name)));
     const digests = new Map(rows.map((a) => [a.name, (a.digest || "").replace(/^sha256:/, "")]));
     await Promise.all(rel.slice(0, 10).map(async (a) => { const d = digests.get(a.name); if (d) { const b = await attestation(owner, info.name, d); if (b) a.built = builtText(b); else if (b === null) a.built = "no GitHub build record"; } }));
+    if (!currentFileRequest(ticket)) return;
     if (!found.size && !rel.length) { urlMsg(`No .fwsc files in ${owner}/${repo}: not committed on ${want.join(" or ")}, and none attached to a release. Its firmware may need building from source, which this page cannot do.`, "small err"); return; }
     if (found.size === 1 && !rel.length) { await useUrl([...found.values()][0]); return; }
-    showList([...found.values()], rel);
+    showList([...found.values()], rel, ticket);
     if (truncated) urlMsg($("url-msg").textContent + " (GitHub cut the file list short for a very large repo.)");
-  } catch (e) { urlMsg(e instanceof TypeError ? blocked : `Could not read that repository: ${e.message}.`, "small err"); }
+  } catch (e) { if (currentFileRequest(ticket)) urlMsg(e instanceof TypeError ? blocked : `Could not read that repository: ${e.message}.`, "small err"); }
 }
 
 // the version in a file name: dotted numbers (v0.9.17) if there are any, else the last short number (FM-1+VA-102).
@@ -410,7 +440,9 @@ const byVersion = (x, y) => {
 };
 const byName = (x, y) => decodeURIComponent(x.pathname).localeCompare(decodeURIComponent(y.pathname), undefined, { numeric: true });
 
-function showList(urls, downloadOnly = []) {
+function showList(urls, downloadOnly = [], ticket = fileEpoch) {
+  if (!currentFileRequest(ticket)) return;
+  let listTicket = ticket;
   const sel = make("select", { id: "url-sort", ariaLabel: "Sort the files" },
     make("option", { value: "version", textContent: "Newest first, by the version in the name" }),
     make("option", { value: "name", textContent: "A to Z" }));
@@ -418,9 +450,13 @@ function showList(urls, downloadOnly = []) {
   const only = downloadOnly.map((a) => make("li", {}, make("span", { className: "dname", textContent: a.name }),
     make("span", { className: "meta", textContent: `release ${a.tag}${a.built ? ": " + a.built : ""}. GitHub only lets you download this one yourself, then drop it in the box above` }),
     make("a", { href: a.href, target: "_blank", rel: "noopener", textContent: "Download", className: "dl" })));
-  const draw = () => $("url-results").replaceChildren(row, ...[...urls].sort(sel.value === "name" ? byName : byVersion).map((u) => {
+  const draw = () => currentFileRequest(listTicket) && $("url-results").replaceChildren(row, ...[...urls].sort(sel.value === "name" ? byName : byVersion).map((u) => {
     const b = make("button", { className: "small", type: "button", textContent: "Use this file" });
-    b.addEventListener("click", () => useUrl(u));
+    b.addEventListener("click", () => {
+      if (!currentFileRequest(listTicket)) return;
+      listTicket = ++fileEpoch;
+      useUrl(u, listTicket);
+    });
     return make("li", {}, make("span", { className: "dname", textContent: decodeURIComponent(u.pathname.split("/").pop()) }), make("span", { className: "meta", textContent: u.host + u.pathname.replace(/[^/]*$/, "") }), b);
   }), ...only);
   sel.addEventListener("change", draw);
@@ -475,6 +511,7 @@ renderNames();
 // ------------------------------------------------------------------ device ---
 
 async function connect() {
+  if (state.busy || state.fileLoading || !state.pkg) return;
   if (!navigator.requestMIDIAccess) {
     say("This browser has no Web MIDI. Use Chrome or Edge on a computer (Firefox and Safari do not work).", "err");
     return;
@@ -645,7 +682,8 @@ function refresh() {
   const resume = dev && IS_OTA(dev.id);
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
   let why = "";
-  if (!pkg) why = "Waiting for a firmware file, chosen in the first box above.";
+  if (state.fileLoading) why = "Reading the firmware file.";
+  else if (!pkg) why = "Choose firmware in the shared Firmware file panel.";
   else if (!state.access) why = "Waiting for your FM-1: press Connect above.";
   else if (!dev) why = "Waiting for an FM-1 to be selected above.";
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
@@ -665,7 +703,10 @@ function refresh() {
   }
   $("rescan").disabled = state.busy || !state.up;
   $("connect-row").hidden = !pkg || !!state.access;
+  $("firmware-inputs").disabled = state.busy;
   $("file").disabled = state.busy;
+  $("connect").disabled = state.fileLoading;
+  $("flash-selection").textContent = pkg ? `Selected firmware: ${pkg.name} · ${pkg.product}` : "Choose firmware in the shared Firmware file panel to begin.";
 
   $("restore").hidden = !(state.refusedStartup && pkg && dev && !state.done);
   const big = !!pkg && pkg.flashLen > APP_END;
@@ -677,7 +718,7 @@ function refresh() {
     : "Needed: a package of the firmware your FM-1 runs now, for its startup code. This is in addition to the file you chose, which is what gets written.";
   $("donor-info").className = "small" + (src ? "" : " warn");
   $("donor-open").textContent = src ? "Use a different file for the startup code" : "Choose the file for the startup code";
-  $("restore-go").disabled = state.busy || !src || !$("risk").checked;
+  $("restore-go").disabled = state.busy || state.fileLoading || !src || !$("risk").checked;
 
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
@@ -698,7 +739,7 @@ async function bootPackage() {
 
 async function install(startup = null) {
   const dev = selectedDevice(), pkg = state.pkg;
-  if (!dev || !pkg || state.busy) return;
+  if (!dev || !pkg || state.busy || state.fileLoading) return;
   const resume = IS_OTA(dev.id);
   state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();

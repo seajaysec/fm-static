@@ -15,13 +15,16 @@ If your firmware's own updater, or M-VAVE's, works for you, use that instead.
 
 ## What it does
 
-**Flash** is the default tab and keeps the installation workflow. **Layout Analysis** provides file analysis only: it can
-inspect the Flash selection, a separately chosen `.fwsc`, a raw backup, or both files together. A package chosen in
-Layout Analysis never changes the install selection. **Use the Flash selection** returns the analysis to that package and its
-selected write options. Switching tabs preserves both selections. During installation the tabs stay on Flash so progress
-remains visible. Inspection warnings about the install file also appear on Flash. **Backup & Recovery** collects external
-backup and recovery tools. **About** contains the feature comparison and links to the troubleshooting workflow, which is visible on **Flash**. Internal recovery
-links select the recovery tab without changing either file selection.
+**Firmware file** is shared above the tabs, on the upper right on wide screens. Choose a local package, saved updater page,
+or URL once: **Flash** and **Layout Analysis** use that same package. Selecting firmware does not connect to the device.
+Changing it updates both views and resets install options and confirmations; an invalid replacement leaves the previous
+selection intact. Package details are expandable, while selection errors and internal checksum warnings stay visible.
+
+**Flash** is the default tab and owns device connection and installation. **Layout Analysis** inspects the shared firmware,
+a raw backup, or both. Switching tabs preserves the firmware, backup and chosen install options. During installation,
+navigation and the shared picker are locked so progress stays visible and the package cannot change.
+**Backup & Recovery** collects external backup and recovery tools. **About** contains the feature comparison and links to
+the troubleshooting workflow on **Flash**. Internal links switch tabs without replacing the selected files.
 
 Backup creation and backup restore are not implemented. The existing **Restore official startup code** operation is
 a firmware-install workaround, not restoration of a raw flash backup.
