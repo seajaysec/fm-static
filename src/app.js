@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.30";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.30";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.30";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.31";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.31";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.31";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.30";
+const VERSION = "2026-10-25.31";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -268,6 +268,7 @@ $("url-form").addEventListener("submit", async (ev) => {
   if (raw && !/^[a-z][a-z0-9+.-]*:/i.test(raw) && /\./.test(raw)) raw = "https://" + raw;   // "example.com/page" works too
   try { page = new URL(raw); if (!/^https?:$/.test(page.protocol)) throw 0; } catch (_) { urlMsg("That is not a web address. Paste the page's address, for example https://example.com/installer.", "small err"); return; }
   if (/\.fwsc$/i.test(page.pathname)) { await useUrl(page); return; }
+  if (await knownSource(page)) return;
   if (page.hostname === "github.com" || page.hostname === "www.github.com") { await githubRepo(page); return; }
   urlMsg(`Reading ${page.host}…`);
   let text;
@@ -289,6 +290,34 @@ $("url-form").addEventListener("submit", async (ev) => {
   if (found.size === 1) { await useUrl([...found.values()][0]); return; }
   showList([...found.values()]);
 });
+
+// ------------------------------------------------------ places we know ---
+// M-VAVE's Workbench page does not allow other pages to read it, but the same Workbench is a download on their GitHub releases, and
+// the Open firmware and the original V15 are inside it. Pasting the Workbench's address (or its repository's) leads there.
+const ref = (href, text) => make("a", { href, textContent: text, target: "_blank", rel: "noopener" });
+async function knownSource(page) {
+  const isWorkbench = /(^|\.)open\.m-vave\.com$/i.test(page.hostname) ||
+    (/(^|\.)github\.com$/i.test(page.hostname) && /^\/m-vave\/fm1_open(\/|$)/i.test(page.pathname));
+  if (isWorkbench) {
+    let asset = null, tag = "";
+    try {
+      const rel = await (await fetch("https://api.github.com/repos/m-vave/fm1_open/releases/latest")).json();
+      asset = (rel.assets || []).find((a) => /Workbench\.html$/i.test(a.name)); tag = rel.tag_name || "";
+    } catch (_) { /* offline or rate limited: the releases page is still the place */ }
+    urlMsg("M-VAVE's Workbench page can't be read from here (their site doesn't allow it). The same Workbench is a download on their GitHub releases, and the Open firmware and the original V15 are inside it. Save the file, then drop it in the box above.");
+    const link = Object.assign(ref(asset ? asset.browser_download_url : "https://github.com/m-vave/fm1_open/releases/latest", asset ? "Download" : "Open the releases"), { className: "dl" });
+    $("url-results").replaceChildren(make("li", {},
+      make("span", { className: "dname", textContent: asset ? asset.name : "FM1 Open Workbench" }),
+      make("span", { className: "meta", textContent: asset ? `release ${tag}` : "the latest release" }), link));
+    return true;
+  }
+  if (/(^|\.)m-vave\.com$/i.test(page.hostname) && /\/download/i.test(page.pathname)) {
+    urlMsg("M-VAVE's download page can't be read from here. Download the FM-1 firmware (.fwsc) there, then drop it in the box above.");
+    $("url-results").replaceChildren(make("li", {}, make("span", { className: "dname", textContent: "M-VAVE downloads" }), make("span", { className: "meta", textContent: "FM-1 firmware: the .fwsc link" }), Object.assign(ref("https://www.m-vave.com/download", "Open"), { className: "dl" })));
+    return true;
+  }
+  return false;
+}
 
 // ------------------------------------------------------------ GitHub repos ---
 // GitHub keeps build attestations (signed records of which workflow built a file from which commit) and looks them up by
