@@ -4,7 +4,7 @@
 // Flash table decoding and region names adapted from MIT-licensed formats.rs
 // and sectormap.rs; see NOTICE.
 // Inspection only: this module never communicates with a device or builds an update.
-import { crc16, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.13";
+import { crc16, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.14";
 
 export const FLASH_SIZE = 0x100000;
 export const BOOT_END = 0x4000;
