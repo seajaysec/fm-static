@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR GPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // The port names the user added ("remembered"), kept in this browser only.
 const KEY = "fm-static.ports";

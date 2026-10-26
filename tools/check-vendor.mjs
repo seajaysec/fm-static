@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR GPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Checks that the vendored fm1-base files still offer what src/updater.js and src/fm1pkg.js use from them, and that the
 // recorded hashes match the files. Run by tools/sync-base.sh and by the weekly sync job; exit 1 means the adapter needs work.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR GPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 //
 // The update protocol is fm1-base's (vendor/fm1-base/fm1ota.js, MPL-2.0, copied unmodified: see vendor/fm1-base/SOURCE).

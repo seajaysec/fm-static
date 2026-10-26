@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR GPL-3.0-only
+// SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
 import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.36";

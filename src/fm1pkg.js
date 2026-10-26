@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 // Copyright (C) 2026 Chris Farrell (modifications)
 //
-// From Felucca's web/fm1pkg.js (https://github.com/hugelton/Felucca).
+// Leo Kuroshita's code, from Felucca's web/fm1pkg.js. Felucca publishes that file as GPL-3.0-only.
+// He also licensed the Felucca code he owns under MPL-2.0 (hugelton/felucca-bsp#4); this file is used under that grant.
+// The MPL text is vendor/fm1-base/LICENSE-MPL-2.0.txt. Changes to this file stay MPL-2.0.
 // Modified 2026-10-06 by Chris Farrell for fm-static: reduced to reading a package
 // (identity, CRC check, origin hint, logical image); the package building code is removed.
 // Added 2026-10-25 (Chris Farrell, own code, from reading packages): rebuild(), a package with the same parts as a template

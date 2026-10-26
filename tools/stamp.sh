@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-License-Identifier: MIT OR GPL-3.0-only
+# SPDX-License-Identifier: MIT
 # Copyright (C) 2026 Chris Farrell
 # Sets the page's version everywhere it appears: the footer, the script URL and the module imports (so a new version
 # is fetched, never a cached older file), and VERSION in src/app.js (the footer warns when the two disagree).
