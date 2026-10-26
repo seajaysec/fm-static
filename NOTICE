@@ -1,11 +1,11 @@
 fm-static
 Copyright (C) 2026 Chris Farrell
 
-The page is MIT (LICENSE). Two parts stay MPL-2.0, file by file: the update
-protocol and package reader copied from fm1-base (vendor/fm1-base/fm1ota.js and
-fm1pkg.js), and src/fm1pkg.js. The MPL text is vendor/fm1-base/LICENSE-MPL-2.0.txt.
-MPL-2.0 lets those files sit inside an MIT page. A change to one of them is
-published under MPL-2.0. It is distributed WITHOUT ANY WARRANTY.
+The page is MIT (LICENSE). The update protocol and the short package reader copied
+from fm1-base stay MPL-2.0 (vendor/fm1-base/fm1ota.js and fm1pkg.js; the text is
+vendor/fm1-base/LICENSE-MPL-2.0.txt). MPL-2.0 lets those files sit inside an MIT
+page. A change to one of them is published under MPL-2.0. src/fm1pkg.js is this
+page's own reading and rebuilding of a package. It is distributed WITHOUT ANY WARRANTY.
 
 This grant covers every revision of Chris Farrell's own files from the first
 commit. Copies of this page already received under GPL-3.0-only keep that
@@ -17,13 +17,6 @@ vendor/fm1-base/ is copied unmodified from fm1-base (https://github.com/charlesv
 Copyright (C) 2026 Charles Vestal and Leo Kuroshita. vendor/fm1-base/SOURCE names the commit.
 m-bootloader 1.2's installer package, by Julius Vitkauskas, is MIT
 (vendor/fm1-base/m-bootloader/, with its licence).
-
-src/fm1pkg.js is Leo Kuroshita's package code from Felucca's web/fm1pkg.js, with Chris Farrell's
-changes in the same file. Felucca publishes that file as GPL-3.0-only. Leo also licensed the
-Felucca code he personally owns under MPL-2.0: https://github.com/hugelton/felucca-bsp/issues/4
-That grant is what this file uses. It does not relicense Felucca, and it does not cover any
-Felucca code he does not own. fm1-base and felucca-bsp are the same grant, already published
-as MPL-2.0.
 
 No firmware is included. A .fwsc file chosen on the page is read in the browser and sent only to
 the FM-1 over USB.

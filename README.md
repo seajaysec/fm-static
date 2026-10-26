@@ -104,10 +104,10 @@ how the firmware sounds, the SMK-37 (it may work; completely untested), browsers
 
 ## Lineage and licence
 
-The update protocol and package reading come from [Felucca](https://github.com/hugelton/Felucca)'s
-web installer by Leo Kuroshita (Hügelton Instruments). The page is MIT. The update code and
-`src/fm1pkg.js` are MPL-2.0, which is the licence he granted for the Felucca code he owns
-([felucca-bsp#4](https://github.com/hugelton/felucca-bsp/issues/4)). See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+The update protocol comes from [Felucca](https://github.com/hugelton/Felucca)'s web installer
+by Leo Kuroshita (Hügelton Instruments), in the MPL-2.0 copy published by
+[fm1-base](https://github.com/charlesvestal/fm1-base). The page is MIT. Package checking,
+rebuilding and the full wipe are this page's own code. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## Running it locally
 
