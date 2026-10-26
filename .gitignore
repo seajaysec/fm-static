@@ -1,3 +1,4 @@
 .DS_Store
 *.fwsc
 !/vendor/fm1-base/m-bootloader/*.fwsc
+node_modules/
