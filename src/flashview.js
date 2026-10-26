@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
-import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.8";
-import { sha256hex } from "./fm1pkg.js?v=2026-10-26.8";
+import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.9";
+import { sha256hex } from "./fm1pkg.js?v=2026-10-26.9";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.8";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.8";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.8";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.8";
-import { setupTabs } from "./tabs.js?v=2026-10-26.8";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.9";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.9";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.9";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.9";
+import { setupTabs } from "./tabs.js?v=2026-10-26.9";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.8";
+const VERSION = "2026-10-26.9";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -246,7 +246,11 @@ async function pickFile(file) {
   }
   await loadFile(file, "", ticket);
 }
-$("file").addEventListener("change", () => pickFile($("file").files[0]));
+$("file").addEventListener("change", () => {
+  const file = $("file").files[0];
+  $("file").value = ""; // Let choosing the same file again count as a new selection.
+  pickFile(file);
+});
 
 // ------------------------------------------------- firmware from an address ---
 // The browser fetches the page itself and looks for .fwsc addresses in its source: nothing goes through any server of

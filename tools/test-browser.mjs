@@ -148,7 +148,6 @@ try {
     await page.locator('#url').fill(url);
     await page.locator('#url-form button').click(); await began;
     assert.equal(await page.locator('#connect').isDisabled(), true, 'lookup blocks connection until settled');
-    await page.locator('#file').setInputFiles([]);
     await page.locator('#file').setInputFiles(nextPath);
     await page.waitForFunction(() => document.querySelector('#f-id').textContent === 'FM-1_016' && document.querySelector('#file-msg').textContent.startsWith('Ready'));
     release(); await page.waitForLoadState('networkidle');
