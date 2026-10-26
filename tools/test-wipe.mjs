@@ -24,6 +24,7 @@ assert.deepEqual(bin.slice(0x4000,target.flashLen),target.image.slice(target.fla
 assert.ok(bin.slice(target.flashLen).every(b=>b===255));
 assert.equal(await sha256hex(target.image),original,'preparation does not mutate the selected package');
 await assert.rejects(wipePasses({...stock,kind:'mvave'},target),/verified official V15/);
+await assert.rejects(wipePasses({...stock,sha256:'0'.repeat(64)},target),/verified official V15/);
 await assert.rejects(wipePasses(stock,{...target,flashLen:APP_END+0x1000}),/standard FM-1/);
 assert.equal((await wipePasses(stock,stock)).length,1);
 console.log('Wipe package checks passed: exact writers and payloads, erased tail, identities, template and layout guards. No hardware accessed.');

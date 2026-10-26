@@ -30,6 +30,7 @@ export function setupTabs() {
     event.preventDefault();
     if (tab.disabled) return;
     select(tab);
+    if (section.tagName === "DETAILS") section.open = true;
     section.focus({ preventScroll: true }); section.scrollIntoView({ block: "start" });
   });
   // Keep the install's progress in view; navigation resumes when it finishes.

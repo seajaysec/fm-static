@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.15";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.15";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.15";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.15";
-import { setupTabs } from "./tabs.js?v=2026-10-26.15";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.15";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.16";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.16";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.16";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.16";
+import { setupTabs } from "./tabs.js?v=2026-10-26.16";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.16";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.15";
+const VERSION = "2026-10-26.16";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -68,6 +68,7 @@ const loaderText = {
 // string is in any package inspected, so a name is only ever offered as "the shape of".
 function shapeText(pkg) {
   if (pkg.kind === "stock") return "The official package: its hash is the unmodified M-VAVE V15's.";
+  if (pkg.product === "FM-1_015") return "This file claims to be V15, but its SHA-256 does not match the verified official V15. It cannot be used as the V15 wipe template or as V15 in the temporary-updater route.";
   if (pkg.kind === "mvave") return `The shape of an M-VAVE release (${pkg.product}): M-VAVE's loader and V15's package layout. Only V15's own hash is known to this page.`;
   if (pkg.loader === "official" && pkg.flashLen > APP_END)
     return `Recognised: the shape of a Baudgirl release (M-VAVE's loader, app area up to ${hex(pkg.flashLen)} against V15's ${hex(APP_END)}; true of every one inspected, though the header carries no maker name). `;
@@ -134,10 +135,11 @@ function note(st, plate, title, text) {
 
 const wipeOn = () => $("wipe").checked;
 // Exact release reviewed against its pinned updater source; see README compatibility evidence.
-const STANDALONE_BOOT = new Set([STOCK_V15_SHA256, BRIDGE_SHA256, "d134cb28486ba35279e622a024db74ac8afa0e017d09f3d0c9507c25b6470a75"]);
+const DEVICE_TESTED_BOOT_SHA256 = "d134cb28486ba35279e622a024db74ac8afa0e017d09f3d0c9507c25b6470a75";
+const STANDALONE_BOOT = new Set([STOCK_V15_SHA256, BRIDGE_SHA256, DEVICE_TESTED_BOOT_SHA256]);
 const bootSupported = (pkg) => !!pkg && STANDALONE_BOOT.has(pkg.sha256);
 const bootOn = () => $("bootl").checked && !wipeOn() && !state.sequence && bootSupported(state.pkg);
-const bridgeAvailable = (pkg, dev) => !!pkg && !!dev && pkg.model === "FM-1" && pkg.loader === "official" && family(dev.id) === "app" && dev.id.text !== BRIDGE_PRODUCT;
+const bridgeAvailable = (pkg, dev) => !!pkg && !!dev && pkg.model === "FM-1" && pkg.loader === "official" && (pkg.product !== "FM-1_015" || pkg.sha256 === STOCK_V15_SHA256) && family(dev.id) === "app" && dev.id.text !== BRIDGE_PRODUCT;
 const multipleFM1s = () => state.devices.filter(d => /^(ota-)?FM-1$/.test(d.id.model)).length > 1;
 // a package whose maker this page cannot vouch for: anything but the official V15 and files with Felucca's marker
 const unverified = (p) => p.kind === "other" || p.kind === "mvave";
@@ -182,9 +184,11 @@ function stepOneRefusal(e, pkg, wipe = false) {
 // ---------------------------------------------------------------- firmware ---
 
 let fileEpoch = 0;
+let returnCheck = 0;
 const currentFileRequest = (ticket) => ticket === fileEpoch && !state.busy && !state.sequence;
 async function loadFile(file, source = "", ticket = ++fileEpoch) {
   if (!file || state.busy || state.sequence) return;
+  returnCheck++;
   state.fileLoading = true;
   const msg = $("file-msg"); msg.className = "small"; msg.textContent = `Reading ${file.name}…`;
   refresh();
@@ -622,6 +626,19 @@ async function scan() {
   } while (scanAgain && !state.busy);
 }
 
+// USB ports can reappear after the updater's final handshake. Refresh from
+// current MIDI state, with a bounded retry if the expected firmware is late.
+async function recheckAfterInstall(expected) {
+  const ticket = ++returnCheck;
+  for (const delay of expected ? [1500, 2000, 3000, 5000] : [1500]) {
+    await new Promise(resolve => setTimeout(resolve, delay));
+    if (ticket !== returnCheck || state.busy || state.fileLoading) return;
+    if (state.scanning) continue;
+    await scan();
+    if (state.devices.some(d => d.id.text === expected)) return;
+  }
+}
+
 function renderDevices() {
   const list = $("device-list");
   list.replaceChildren();
@@ -678,7 +695,7 @@ document.addEventListener("visibilitychange", () => {
 // ------------------------------------------------------------- boot mode ---
 // A FM-1 whose firmware does not start falls back to the chip's ROM boot mode (WL80UBOOT, USB vendor 4C4A): not a MIDI
 // device, so Web MIDI never sees it; WebUSB can list it (nothing is opened or sent).
-if (navigator.usb) $("boot-help").hidden = false;
+$("boot-check").hidden = !navigator.usb;
 $("boot-check").addEventListener("click", async () => {
   const box = $("boot-msg");
   box.replaceChildren();
@@ -760,6 +777,7 @@ $("backup").addEventListener("change", refresh);
 function refresh() {
   updateTabs(state.busy);
   const dev = selectedDevice(), pkg = state.pkg;
+  $("v15-voices").hidden = pkg?.kind !== "stock";
   const resume = dev && IS_OTA(dev.id);
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
   let why = "";
@@ -788,6 +806,8 @@ function refresh() {
   if ($("bootl").disabled) $("bootl").checked = false;
   $("boot-compatibility").textContent = pkg?.kind === "stock"
     ? "Official V15 supports the standalone installer; m-bootloader’s author reports testing it with M-UPGRADE. This page’s V15 pairing has not been device tested."
+    : pkg?.sha256 === DEVICE_TESTED_BOOT_SHA256
+    ? "This exact firmware release and the bundled m-bootloader installer were tested together on an FM-1 through this page."
     : "This exact firmware release’s updater supports the standalone installer (source checked and host tested). This pairing has not been tested on a device.";
   if (canWipe) {
     $("wipe-method").textContent = pkg.loader === "app"
@@ -847,8 +867,10 @@ async function install(startup = null, throughBridge = false) {
   const sequenced = !!state.sequence || doWipe || throughBridge, doBoot = !resume && !sequenced && bootOn();
   if (sequenced && multipleFM1s()) { say("Disconnect other FM-1s and refresh devices before starting or continuing a two-pass operation.", "err"); return; }
   if (doWipe && state.stock?.kind !== "stock") { say("Choose the verified official V15 package for the wipe template first.", "err"); return; }
+  returnCheck++;
   state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();
+  say(throughBridge && !state.sequence ? "Downloading and checking the temporary updater. No installation has started yet." : "Preparing the installation…");
   const up = new Updater(state.access, log);
   up.setPatterns(state.up.patterns);
   up.select(dev.name);
@@ -944,8 +966,8 @@ async function install(startup = null, throughBridge = false) {
   if (state.sequence) { state.devices = []; state.selected = null; renderDevices(); }
   state.busy = false;
   progress(null);
-  setTimeout(scan, 1500);
   state.done = pct === 100 && !$("status").classList.contains("err");
+  void recheckAfterInstall(state.done ? pkg.product : null);
   refresh();
 }
 

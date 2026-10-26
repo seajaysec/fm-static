@@ -107,7 +107,8 @@ try {
   await page.locator('#backup-inspection a[href="#desktop-recovery"]').click();
   assert.equal(await page.locator("#tab-recovery").getAttribute("aria-selected"), "true");
   assert.equal(await page.evaluate(() => document.activeElement.id), "desktop-recovery");
-  assert.equal(await page.locator("#desktop-recovery a").count(), 4);
+  assert.equal(await page.locator("#desktop-recovery .recovery-tools a").count(), 4);
+  assert.equal(await page.locator('#recovery-steps > details').count(), 4);
   await page.screenshot({ path: "/tmp/flash-recovery.png" });
   await page.locator("#tab-advanced").click();
   await page.locator(".compact-diagram").screenshot({ path: "/tmp/flash-layout-diagram.png" });
@@ -287,11 +288,22 @@ try {
   await page.waitForFunction(() => document.querySelector("#f-id").textContent === "FM-1_015");
   assert.equal(await page.locator("#wipe").isChecked(), false);
   assert.match(await page.locator("#flash-ranges").textContent(), /0x93000/);
+  await page.locator('#bridge-row').waitFor({state:'visible'});
+  assert.equal(await page.locator('#v15-voices').isVisible(),true);
+  await page.locator('#v15-voices a').click();
+  assert.equal(await page.locator('#tab-recovery').getAttribute('aria-selected'),'true');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'factory-voices');
+  assert.equal(await page.locator('#factory-voices').evaluate(e=>e.open),true);
+  await page.locator('#tab-flash').click();
   // Outer package CRCs pass, but an internal application CRC does not.
   const damaged = packageFlash(old).slice(); damaged[0x5000] ^= 1;
   await page.locator("#flash-details").evaluate((e) => e.open = false);
   await page.locator("#file").setInputFiles({ name: "damaged-app.fwsc", mimeType: "application/octet-stream", buffer: Buffer.from(rebuild(old.image, damaged, old.product)) });
   await page.waitForFunction(() => document.querySelector("#flash-warnings").textContent.includes("checksum does not match"));
+  await page.locator('#trust').check();
+  assert.equal(await page.locator('#backup-row').isVisible(), true, 'other install prerequisites are satisfied');
+  assert.equal(await page.locator('#bridge-row').isVisible(), false, 'modified V15 cannot use the guided return route');
+  assert.match(await page.locator('#route-file').textContent(), /SHA-256 does not match/);
   assert.equal(await page.locator("#install-analysis-warning").isVisible(), true, "internal corruption visible on Flash");
   assert.match(await page.locator("#install-analysis-warning").innerText(), /checksum does not match/);
   await page.locator("#tab-advanced").click();
@@ -499,11 +511,29 @@ try {
     assert.deepEqual((await page.evaluate(()=>window.bridgeCalls)).map(c=>c.product),[BRIDGE_PRODUCT,'FM-1_015']);
     assert.equal(await page.evaluate(()=>window.bootAttempts),0,'bridge route skips boot even if previously selected');
     await page.locator('#route-events').screenshot({path:'/tmp/fm-static-helper-complete-mobile.png'});
+    // A returned identity can be followed by a late USB re-enumeration. The
+    // completion refresh must retry, and a different firmware is not success.
+    await page.evaluate(async () => {
+      const url=new URL('src/updater.js',location.href);url.search=new URL(document.querySelector('script[type="module"]').src).search;
+      const {Updater}=await import(url.href);
+      window.returnScans=0;
+      Updater.prototype.scan=async()=>{
+        const n=++window.returnScans;
+        return n===1?[]:[{name:'FM-1',id:{text:n===2?'FM-1_700':'FM-1_015',model:'FM-1',version:n===2?700:15}}];
+      };
+    });
+    await page.waitForFunction(()=>window.returnScans>=3,null,{timeout:15000});
+    assert.match(await page.locator('#device-list').innerText(),/FM-1_015/);
     await page.unroute(BRIDGE_URL);
   }
   // Isolated tab controller: test the install navigation lock without flashing.
   const navigation = await browser.newPage();
+  await navigation.addInitScript(() => Object.defineProperty(navigator, 'usb', {value: undefined}));
   await navigation.goto(process.env.FLASH_TEST_URL || 'http://127.0.0.1:8873');
+  assert.equal(await navigation.locator('#boot-help').getAttribute('hidden'),null,'guidance does not require WebUSB');
+  assert.equal(await navigation.locator('#boot-check').isHidden(),true);
+  await navigation.locator('#tab-recovery').click();
+  assert.equal(await navigation.locator('#recovery-steps').isVisible(),true,'recovery instructions need no firmware file or connection');
   await navigation.setContent('<div class="mode-tabs" role="tablist">' + ['flash','advanced','recovery','about'].map((name,i) => '<button id="tab-' + name + '" role="tab" aria-controls="panel-' + name + '" aria-selected="' + (i===0) + '">' + name + '</button>').join('') + '</div>' + ['flash','advanced','recovery','about'].map(name => '<div id="panel-' + name + '" role="tabpanel"></div>').join(''));
   await navigation.evaluate(async () => { window.lockTabs = (await import(new URL('src/tabs.js', location.href).href)).setupTabs(); });
   await navigation.locator('#tab-about').click();

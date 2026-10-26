@@ -75,21 +75,25 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   this page's V15 pairing has not been device tested. The reviewed community entry is [LOOM 0.9](https://github.com/charlesvestal/fm1-loom/releases/tag/v0.9), SHA-256
   `d134cb28486ba35279e622a024db74ac8afa0e017d09f3d0c9507c25b6470a75`. Its pinned
   [updater](https://github.com/hugelton/felucca-bsp/blob/305c372c3ec18f3917744e608998a0d7fd700135/chip/ota.c)
-  accepts packages without `flash.bin`; host simulation accepts the bundled installer. This exact pairing has not been
-  device tested. Releases requiring both `flash.bin` and `ota.bin` reject the standalone installer at the header check.
+  accepts packages without `flash.bin`; host simulation accepts the bundled installer. This exact pairing completed on
+  an FM-1 through this page, returning `FM-1_10000900` after the bootloader installer.
+  Releases requiring both `flash.bin` and `ota.bin` reject the standalone installer at the header check.
 - **Install through a temporary updater**: when selecting an official-loader FM-1 package while community firmware
   answers, an optional two-pass route installs the generic fm1-base template 0.3 first, verifies its identity, then
   installs the original selection. It does not add the extended wipe or m-bootloader. Normal installation remains the
   default. The warning is based on firmware identity; this page cannot determine the installed bootloader from that reply.
   This helps with older updaters that compare the incoming startup code byte for byte with the device's current code.
+  A file identifying itself as V15 (`FM-1_015`) is eligible only when its SHA-256 matches the verified official V15;
+  a matching name or valid package CRC alone is not enough. The V15 wipe template uses the same exact-file check.
   The [upstream template file](https://github.com/charlesvestal/fm1-base/blob/cb2baf68226d3eca38b3c1909423e029f0474626/firmware/template-0.3.fwsc)
   is fetched at that immutable revision and must match SHA-256
   `a62e6d803b0fa223839d4af1eb558a4d02cc27b1f5c492e93b4a49beedc00538` and identity `FM-1_11000300`.
   Upstream identifies its source as [934e40d](https://github.com/charlesvestal/fm1-base/tree/934e40d846d84e76e9c428d37b74bccb6192c823),
   with BSP [2cd696a](https://github.com/hugelton/felucca-bsp/tree/2cd696a2b94341077303e9132bb4be3d0a87ebcf).
   That updater accepts official V15 and the standalone boot installer in host simulation; the exact template is also
-  in the boot-option allowlist. The template install and complete return-to-stock sequence have not been tested on a
-  device here. Temporary firmware may change saved data; back up first. Official updates replace m-bootloader.
+  in the boot-option allowlist. The complete return-to-V15 route was tested on an FM-1 from Optimist 0.2 synths with
+  m-bootloader, after reproducing the four-request refusal. Other starting builds remain unverified, as does installing
+  m-bootloader through the template. Temporary firmware may change saved data; back up first. Official updates replace m-bootloader.
   Both two-pass routes retain their current package for retry, require only one responding FM-1, and pin the next pass
   to the port that returned the verified identity. After failure, fresh discovery and explicit device selection are required.
 - Can read a GitHub repository address: it lists the `.fwsc` files committed in the repo (loadable) and attached to
@@ -100,8 +104,11 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
 - Lets you keep your own port names, so the page finds your FM-1 by itself next time (stored in
   your browser only).
 - During an install, follows the FM-1 as its port changes when it restarts into the update loader
-  and back.
+  and back. After success, refreshes the device list after 1.5 seconds and retries up to three more times if the expected
+  identity is missing. Loading another file or starting another install cancels the pending checks.
 - If an update was cut off and the FM-1 is still in update mode, offers **Finish update**.
+- Backup & Recovery explains firmware-specific rescue controls, ROM download mode and the desktop backup/install/restart
+  sequence. These instructions remain available without WebUSB; the optional USB picker only identifies devices.
 - Installs over any firmware: it never refuses because of what the FM-1 runs now (only a wrong model). It reads the
   package (which update loader it carries, flash.bin size, whether its startup code is official V15's) and lists what it
   saw as checkpoints, including what an installer that only starts from V15 would have stopped on.
@@ -197,8 +204,21 @@ round it; installing m-bootloader after a firmware and then putting M-VAVE's V16
 GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
 update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page.
 
-Those wipe runs cover the earlier single-pass route. Not tested on a device: the two-pass V15 wipe and generic-template routes, finishing an interrupted update,
-the startup-code refusal and its restore step, boot-mode detection, the wrong-model refusal, m-bootloader's recovery menu and download-mode keys. Out of scope:
+On 2026-10-26, another real-device test installed the reviewed LOOM 0.9 package and bundled m-bootloader 1.2, then
+[Optimist 0.2 synths](https://github.com/w0ts/optimist/releases/tag/v0.2), identity `FM-1_722`, SHA-256
+`926f08a95fa0e00f988bfd73f82fd8df130b9a8e4aa95a98e3aca925ec9b89a7` (matched the release checksums).
+Normal installation of verified V15 stopped after exactly four requests. **Install through temporary updater** then
+completed both passes: `FM-1_722` → `FM-1_11000300` → `FM-1_015`. The original V15 selection stayed loaded, and the
+automatic post-install scan rediscovered V15 about 1.58 seconds after completion. This tests the released synths build,
+not every custom build sharing the older `FM-1_700` identity. No extended wipe or startup-byte substitution was used.
+The device owner reported incorrect preset sounds afterward. **Returning to V15 does not restore its factory voice banks.**
+Optimist can reuse that storage; its own installer and [M-VAVE’s Workbench](https://open.m-vave.com/fm1-workbench)
+provide a separate bank-restoration operation. The site now warns when V15 is selected and explains the manufacturer's
+factory-voice route in Backup & Recovery. That operation replaces all 128 stored voices and has not been exercised here;
+the recovery test establishes boot and identity, not factory sound/data restoration.
+
+Those wipe runs cover the earlier single-pass route. Not tested on a device: the two-pass V15 wipe, finishing an interrupted update,
+the separate startup-byte substitution workaround, boot-mode detection, the wrong-model refusal, m-bootloader's recovery menu and download-mode keys. Out of scope:
 how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 
 The read-only inspection additions have host coverage for V15/V16 layouts, malformed tables, internal CRCs, unknown

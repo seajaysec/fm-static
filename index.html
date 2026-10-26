@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.15">
+<link rel="stylesheet" href="style.css?v=2026-10-26.16">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -85,6 +85,7 @@
   <section class="stage" id="st-start">
     <h2>Flash firmware</h2>
     <p id="flash-selection">Choose firmware in the shared Firmware file panel to begin.</p>
+    <p id="v15-voices" class="small warn" hidden>Returning to V15 restores the firmware, not its factory voice banks. Community firmware can leave incompatible sound data behind. If the presets sound wrong afterward, <a href="#factory-voices">restore the factory voices separately</a>; that replaces all 128 stored voices.</p>
       <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from a source I trust and accept the risk of installing it.</label></p>
       <p id="connect-row" class="next"><button id="connect" aria-describedby="connect-hint" disabled>Connect your FM-1</button> <span id="connect-hint" class="small">Load a firmware file first.</span></p>
     <p id="status" role="status"></p>
@@ -112,10 +113,11 @@
       </details>
       <p class="small">MIDI permission is already granted for this session. Your browser may remember it and skip the prompt next time; the port list is checked again.</p>
       <p class="after"><button id="rescan" class="small">Refresh devices</button></p>
-      <details id="boot-help" hidden>
+      <details id="boot-help">
         <summary>FM-1 still missing? Check USB recovery mode</summary>
         <p class="after">If normal firmware cannot start, the FM-1 may appear as a USB recovery device instead of a MIDI instrument. This is the chip’s built-in ROM download mode, sometimes called “boot mode”; it is different from the MIDI update mode used while flashing.</p>
-        <p class="small">This check opens a USB device picker and only identifies the selected device. It does not switch modes or write firmware. A missing MIDI port alone does not mean the FM-1 needs recovery.</p>
+        <p><a href="#recovery-steps">How to enter recovery mode and what to do next</a>. The button combination depends on the firmware or bootloader installed.</p>
+        <p class="small">Where WebUSB is available, the check below opens a USB device picker and only identifies the selected device. It does not switch modes or write firmware. A missing MIDI port alone does not mean the FM-1 needs recovery.</p>
         <button id="boot-check" class="small">Check for a USB recovery device</button>
       </details>
       <div id="boot-msg" hidden></div>
@@ -127,7 +129,7 @@
             <b>Install through a temporary updater</b>
             <p>Some community updaters reject official firmware when startup code has changed—for example after installing m-bootloader. We can read the running firmware’s identity, but cannot tell from it which bootloader is installed. Try a normal install first; use this route if needed.</p>
             <p>Pass 1 installs the generic <a href="https://charlesvestal.github.io/fm1-base/" target="_blank" rel="noopener">fm1-base template 0.3</a>, preserving startup code. Once it answers, pass 2 installs your selected firmware. Your selection stays loaded. No extended wipe or m-bootloader installation is added.</p>
-            <p class="warn">This replaces the running application temporarily and can affect saved data. Official firmware then replaces the bootloader. Source checked and host tested; this complete route is not yet device tested here. Keep this page open through both passes; reloading loses its recovery state.</p>
+            <p class="warn">This replaces the running application temporarily and can affect saved data. Official firmware then replaces the bootloader. Tested on an FM-1 returning from Optimist 0.2 synths with m-bootloader to verified V15; other starting builds remain unverified. Keep this page open through both passes; reloading loses its recovery state.</p>
             <p><button id="bridge-go" type="button" disabled>Install through temporary updater</button></p>
             <p class="small">Requires the backup acknowledgement below and only one responding FM-1. Disconnect other FM-1s first. The temporary file is fetched from a pinned upstream revision and checked by SHA-256 before either pass begins.</p>
           </div>
@@ -181,7 +183,7 @@
             <div>
           <h3>Restore official startup code</h3>
           <p class="warn">If you installed m-bootloader separately, a normal firmware file usually cannot supply the startup bytes now on your device. Try the compatible-updater route below before this workaround.</p>
-          <p><b>Return to stock through a compatible updater:</b> use <a href="#bridge-row">Install through a temporary updater</a> above. It installs the generic fm1-base template first, then your selected official firmware. The complete route has not been tested on a device here. Installing V15 normally replaces m-bootloader with M-VAVE’s bootloader. <a href="#desktop-recovery">M-Flasher is the desktop alternative</a>.</p>
+          <p><b>Return to stock through a compatible updater:</b> use <a href="#bridge-row">Install through a temporary updater</a> above. It installs the generic fm1-base template first, then your selected official firmware. This completed on an FM-1 after reproducing the four-request V15 refusal with Optimist 0.2 synths and m-bootloader. Installing V15 normally replaces m-bootloader with M-VAVE’s bootloader. <a href="#desktop-recovery">M-Flasher is the desktop alternative</a>.</p>
           <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
             startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
             loader writes the package, its own startup code included.</p>
@@ -253,7 +255,7 @@
         <div class="wf-node"><span class="wf-number" aria-hidden="true">4</span><h3>Install and check</h3><p>The device checks the package, writes it and restarts. The page checks the returned identity.</p></div>
         <div class="wf-branches">
           <div class="wf-detour"><h4>Package refused?</h4><p>Read the refusing checkpoint. Use a compatible package or return to stock first.</p></div>
-          <div class="wf-detour wf-untried"><h4>Official firmware refused?</h4><p>Install through the generic temporary updater, then your selected firmware. Both identities are checked.</p></div>
+          <div class="wf-detour"><h4>Official firmware refused?</h4><p>Install through the generic temporary updater, then your selected firmware. Both identities are checked. Tested from Optimist 0.2 synths with m-bootloader back to V15.</p></div>
           <div class="wf-detour wf-untried"><h4>Startup-code refusal?</h4><p>The opt-in restore step offers another route. Read its risks before proceeding.</p></div>
           <div class="wf-detour wf-untried"><h4>Write interrupted?</h4><p>If the update loader still answers, reconnect and use Finish update.</p></div>
           <div class="wf-detour wf-untried"><h4>Extended wipe?</h4><p>Application-loader packages take two passes through V15. Both passes must finish. Not yet device tested.</p></div>
@@ -318,6 +320,42 @@
       <dt>Bricked FM-1</dt><dd><a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1 Transporter</a> — recovery through an extra RP2040/RP2350 board wired to the USB data lines. It has its own Chrome/Edge web app over serial. Hardware and setup are required; this page does not control it.</dd>
     </dl>
     <p class="small">A firmware's own project export is different from a full-flash backup. Layout Analysis accepts a raw 1 MiB .bin file; it cannot restore it. These external recovery paths have not been tested on a device as part of this page.</p>
+    <div id="recovery-steps" tabindex="-1">
+      <h3>Get back to working firmware</h3>
+      <details>
+        <summary>MIDI still answers, or an update was interrupted</summary>
+        <p>If the update loader answers, keep the same firmware file loaded and use <b>Finish update</b>. For a two-pass operation, keep this page open so it retains the package for the interrupted pass.</p>
+        <p>If normal firmware answers but refuses V15 after four requests, try <b>Install through a temporary updater</b> on Flash. You do not need ROM download mode for that route.</p>
+        <p><b>Optimist only:</b> if the application will not start, hold <b>OCT− alone while switching on</b> for its USB rescue screen, then reconnect to a MIDI installer. This is an application rescue mode, not ROM download mode. <a href="https://github.com/w0ts/optimist#getting-back" target="_blank" rel="noopener">Optimist’s recovery instructions</a>.</p>
+      </details>
+      <details>
+        <summary>No MIDI reply: enter ROM download mode</summary>
+        <p>Use the method for what is installed. There is no universal FM-1 button combination.</p>
+        <ul>
+          <li><b>Working stock or Felucca firmware:</b> use M-Flasher’s <b>DOWNLOAD MODE</b> action over USB MIDI.</li>
+          <li><b>m-bootloader installed:</b> hold <b>REC while switching on</b>. Holding PLAY instead opens its recovery menu.</li>
+          <li><b>Felucca, SLOOP or Snoop37 running:</b> hold <b>OCT− and OCT+ for 5 seconds</b>.</li>
+          <li><b>Optimist installed:</b> its instructions specify holding <b>OCT− and OCT+ while switching on, for 3 seconds</b>. Do not apply that shortcut to other firmware.</li>
+        </ul>
+        <p>Connect directly with a USB data cable. The computer may see <b>WL82 UBOOT1.00</b>, with no usable drive in Finder or Explorer; the display can stay dark or unchanged. On macOS, open M-Flasher promptly: the disk driver may make the device leave download mode after about 30 seconds.</p>
+        <p>If these methods cannot reach it, use the external hardware recovery routes above. <a href="https://github.com/jvitkauskas/m-flasher/blob/main/docs/usage.md#download-mode" target="_blank" rel="noopener">M-Flasher’s current instructions</a> · <a href="https://github.com/jvitkauskas/m-bootloader" target="_blank" rel="noopener">m-bootloader controls</a>.</p>
+      </details>
+      <details>
+        <summary>Once M-Flasher finds it</summary>
+        <ol>
+          <li>Check the detected model and <b>Back up the whole flash</b> before changing anything. Keep the resulting files.</li>
+          <li>Choose <b>Install firmware (.fwsc)</b> or restore a suitable backup. Review the bootloader and erase options; they change what is written.</li>
+          <li>Wait for writing and verification to finish. Then unplug, switch off and on, and reconnect.</li>
+          <li>To check the running firmware here, return to Flash, load its package, connect and use <b>Refresh devices</b>. The firmware identity matters more than the cached MIDI port name.</li>
+        </ol>
+      </details>
+      <details id="factory-voices" tabindex="-1">
+        <summary>V15 runs, but its presets sound wrong</summary>
+        <p>A successful firmware install is not a factory reset. Community firmware such as Optimist uses storage that V15 expects to hold its voice banks. This page installs V15 but does not restore those banks; incompatible data can make the sounds wrong even when the firmware identity is correct.</p>
+        <p>Use <a href="https://open.m-vave.com/fm1-workbench" target="_blank" rel="noopener">M-VAVE’s Open Workbench</a>: choose <b>Restore original V15</b>, connect and acknowledge your backup. For a device already running V15, its install action becomes <b>Restore factory voices</b> and skips reflashing. Accept its overwrite warning, wait for completion, then select a voice again to audition it.</p>
+        <p class="warn">This replaces all four banks—128 stored voices—with the factory sounds. Preserve any stock voices you want to keep first. It is a separate data-writing operation, not the extended area wipe or a full-flash backup restore. The factory-bank restoration itself has not been tested here.</p>
+      </details>
+    </div>
   </section>
   </div>
   <div id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
@@ -513,8 +551,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.15</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.16</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.15"></script>
+<script type="module" src="src/app.js?v=2026-10-26.16"></script>
 </body>
 </html>
