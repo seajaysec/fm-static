@@ -2,8 +2,14 @@
 
 **[Open fm-static](https://seajaysec.github.io/fm-static/)**
 
-A web page that installs a `.fwsc` firmware file on an M-VAVE FM-1 over USB, for one situation:
-**your FM-1's MIDI port has a different name on your computer, and the usual updaters can't find it.**
+A browser installer for M-VAVE FM-1 firmware: choose your destination package, find the device, inspect expected writes,
+and follow the install through refusals or optional cleanup.
+
+There is no blanket V15 prerequisite. The page checks the package and device state, and handles intermediate steps
+when a supported process needs them. Optional cleanup uses V15 temporarily; refused official firmware can use a
+separate compatible updater. Your selected firmware remains the destination.
+
+One common connection problem is an FM-1 MIDI port with an unfamiliar name.
 
 That can happen on purpose (you renamed the device) or by itself. On a Mac, Audio MIDI Setup names a
 USB MIDI port from its own cache, keyed by the USB id and the socket. Many FM-1 firmwares share the
@@ -46,15 +52,15 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   read them; for the rest it says so and you download the file and drop it in.
 - **Package layout and write preview**: decodes the boot and application tables, checks internal application-file CRCs,
   and shows the regions declared for settings, Bluetooth pairings, sequences and other data. The preview uses the
-  recognised loader design to show expected firmware writes; unknown loaders get no guessed write range. It does not
+  recognised loader design to show expected firmware and cleanup writes; unknown loaders get no guessed write range. It does not
   read the live flash. Staging and update-record cleanup may write outside those ranges, and custom firmware may use
   data differently from its declarations.
 - **Offline backup inspection**: open a raw 1 MiB `.bin` flash backup, even without connecting an FM-1. With a package
-  selected, compare declared data layouts and count differing bytes within the expected firmware write ranges. This
+  selected, compare declared data layouts and count differing bytes within the available expected write ranges. This
   compares files, not the connected device; it neither creates nor restores backups and does not prove data compatibility.
   The comparison also counts complete matching/differing 4 KiB sectors and sectors that are all `0xFF` in the backup.
   Erased bytes alone do not diagnose an interrupted update.
-- Optional **application/data wipe**, usually unnecessary: try a normal install first. It may be worth trying if a normal
+- Optional **application/data cleanup**, usually unnecessary: try a normal install first. It may be worth trying if a normal
   flash fails. Writes the chosen firmware with M-VAVE's update loader over a package covering flash up to 0xBA000,
   so every sector in that range is erased first (saved projects and settings kept there are lost). The package is built
   from the official V15 package's loader and startup code plus the chosen firmware's app area, the way a Baudgirl
@@ -103,7 +109,7 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   releases (download-only: GitHub does not let a web page read those). For files GitHub holds a build attestation for, it
   shows which workflow built them from which commit; it reports what GitHub says and does not verify the signature.
 - Lists every MIDI port. Ports with a usual FM-1 name are asked who they are; any other port is sent
-  nothing until you press **Try this port** on it.
+  nothing until you press **Check this port** on it.
 - Lets you keep your own port names, so the page finds your FM-1 by itself next time (stored in
   your browser only).
 - During an install, follows the FM-1 as its port changes when it restarts into the update loader
@@ -135,54 +141,67 @@ and nothing reaches the page without a merge. `node tools/check-vendor.mjs` chec
 ## How it gets past a snag
 
 Where the page checks something, what it does when the check fails, and what you are offered. Boxes with a dashed outline
-are paths that have not been run on an FM-1 yet.
+are paths that have not been run on an FM-1 yet. Solid outlines do not imply every starting build is tested;
+see the specific hardware-tested routes below.
 
 ```mermaid
 flowchart TD
-  A[Choose a .fwsc: drop it, or paste a page or GitHub address] --> B[Read the file: checksums, identity, loader, size]
-  B --> C{Checksums match?}
-  C -- no --> C1[Stop: the file is damaged or not an FM-1 package]
-  C -- yes --> D[Connect: ask ports with usual FM-1 names who they are]
-  D --> E{FM-1 answered?}
-  E -- no --> F[List every port: press Try on yours, or add its name]
-  F --> G{Answered?}
-  G -- no --> H[Nothing is sent to other ports. Suggests: check the cable, close other apps using MIDI, or the boot mode check]
-  E -- yes --> I[Device facts: port and running firmware]
-  G -- yes --> I
-  I --> J{Right model?}
-  I -- "running M-VAVE's Open firmware" --> X[The page tells it the package's hash first. It takes only M-VAVE's own firmware: for anything else, put M-VAVE's back first]
-  J -- no --> J1[Stop: a package for another model is the only thing refused]
-  J -- yes --> K[Back up first. Unknown-origin file: confirm a source you trust. Optional: area wipe up to 0xBA000]
-  K --> M[Install: the FM-1's own firmware looks at the package first]
-  K -- official package with community firmware, if chosen --> B1[Generic template updater first. Verify its identity, then install the original selection normally]
-  B1 --> O
-  K -- optional extended cleanup --> P[Temporarily reach verified V15. Skip if V15 already runs]
-  P --> PB[Apply valid data at 0xEA000–0xEE000. Require every acknowledgement]
-  PB --> P2[Pass 2: official loader installs chosen firmware and wipes to 0xBA000. No m-bootloader afterwards]
+  A[Choose your destination firmware] --> B[Check package integrity, identity, loader and size]
+  B --> C{Valid package?}
+  C -- no --> C1[Stop and choose an intact supported package]
+  C -- yes --> D[Connect and query usual FM-1 ports]
+  D --> E{FM-1 answers?}
+  E -- no --> F[Refresh ports or use Check this port on your device]
+  F --> E
+  E -- yes --> J{Model matches?}
+  J -- no --> J1[Stop: choose firmware for this model]
+  J -- yes --> K[Back up first; confirm unknown sources; choose install options]
+  K -- normal install --> M[Device checks the package; Open firmware is armed first]
+  M --> N{Accepted?}
+  N -- yes --> O[Write and restart; verify expected identity]
+  N -- no --> Q[Explain the refusal; no firmware written in this attempt]
+  K -- supported official-firmware route --> B1[Hash-check and install the generic temporary updater]
+  Q -- temporary updater offered --> B1
+  B1 --> B2{Expected temporary identity answers?}
+  B2 -- yes --> M
+  K -- optional cleanup --> P[Prepare both packages and hash-check fixed data before writing]
+  P --> P0[Reach verified V15; skip its install if already running]
+  P0 --> P1{V15 identity answers?}
+  P1 -- yes --> PB[Apply valid data at 0xEA000–0xEE000; require every acknowledgement]
+  PB --> PC{All data acknowledged?}
+  PC -- yes --> P2[Official loader installs selected firmware and wipes below 0xBA000]
   P2 --> O
-  M --> N{Does it accept it?}
-  N -- yes --> O[The FM-1 writes it and restarts. The page checks it came back as the new firmware. Done]
-  N -- no --> Q[Nothing was written. The page says in plain words which check said no and what to do: install V15 first, or choose another package]
-  Q -- startup code --> R[Restore step: shows the risks, asks for one more file, tries again]
-  O -- reviewed compatible release, no wipe, if ticked --> W[Then m-bootloader: one more restart. PLAY at power-on opens recovery; REC opens USB download mode for desktop tools]
-  M --> S[If the write is cut off, the FM-1 stays in update mode. Reconnect and the Install button reads Finish update: it continues the same install]
+  B2 -- no --> HOLD[Stop the sequence; keep page open; refresh and select the same device to retry]
+  P1 -- no --> HOLD
+  PC -- no --> HOLD
+  HOLD -- retry incomplete data --> PB
+  HOLD -- cannot recover --> T[Choose an external recovery route]
+  Q -- separate opt-in workaround --> R[Startup-code restore: matching existing startup bytes required; hardware untested]
+  R --> M
+  O -- normal install only; reviewed release and boot option selected --> W[Install m-bootloader; verify return]
+  O --> DONE[Done; scan again for the returning firmware]
+  W --> DONE
+  M -. interrupted write .-> S[If the update loader answers, Finish update resumes this pass and completes any remaining sequence]
+  P2 -. interrupted write .-> S
+  P0 -. interrupted write .-> S
+  B1 -. interrupted write .-> S
   S --> O
-  H --> T{Still stuck after the suggested steps?}
-  Q -- retry still fails --> T
-  S -- loader never returns --> T
+  Q -- still stuck --> T
+  E -- no response after checks --> T
+  S -- loader unavailable --> T
   T -- normal MIDI update --> U[M-UPGRADE: official desktop updater]
   T -- ROM download mode --> V[M-Flasher: full backup, restore and recovery]
   V -. command-line alternative .-> Z[MvaveFM1Unbricker: Windows or Linux]
   T -- Bricked FM-1 --> Y[FM-1 Transporter: extra hardware required]
   classDef notrun stroke-dasharray: 6 4
-  class H,J1,S,R,P,P2,B1 notrun
+  class J1,S,R notrun
 ```
 
 The About tab uses a responsive feature table comparing M-VAVE Open Workbench, community installers, FM-Static,
 and named external recovery tools. Community support for arbitrary packages and V15-first gating is described as variable;
-Felucca is a reference example, not the whole category. FM-Static imposes no V15-first gate and checks the device and package.
+Felucca is a reference example, not the whole category. FM-Static checks the device and package, and facilitates a V15 step when a supported process needs one.
 The comparison explicitly covers install assistance: manually chosen ports, tracking port changes, known refusal checkpoints,
-the opt-in startup-code workaround, Open firmware handshaking, area wipe and expected write regions. It distinguishes those
+the guided temporary updater, opt-in startup-code workaround, Open firmware handshaking, automatic data cleanup when selected, and expected write regions. It distinguishes those
 from shared restart verification and interrupted-update retries, and labels the untested restore path.
 Firmware-specific project backups are grouped with the tasks delegated to other tools. Sources and the review date are
 shown with the table. Every cell uses the same status key: supported, limited/variable/different approach, or not provided/out
@@ -205,7 +224,7 @@ flowchart TD
 Run on a real FM-1 (macOS, Chrome): installs in every direction between official V15, M-VAVE's V16, Baudgirl releases,
 Felucca-family firmwares and Mutable Dreams, with and without the application/data wipe; a real refusal by a newer Felucca and the way
 round it; installing m-bootloader after a firmware and then putting M-VAVE's V16 back over it; a package found through a
-GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
+GitHub address; an FM-1 whose port name the page does not recognise (found with Check this port, then followed through the
 update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page.
 
 On 2026-10-26, another real-device test installed the reviewed LOOM 0.9 package and bundled m-bootloader 1.2, then

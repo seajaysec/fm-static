@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.18">
+<link rel="stylesheet" href="style.css?v=2026-10-26.19">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -26,7 +26,7 @@
       FM-1 to flash through other means. Bring a <code>.fwsc</code> file and follow the process through to the end.</p>
     <p class="small">It is made for the M-VAVE FM-1. The SMK-37 may work; that is completely untested. It checks that the FM-1 comes back running what you installed, not how it sounds.</p>
     <details class="small v15note"><summary>Do I need official V15 first?</summary>
-      <p>No. Some installers and firmwares caution against installing anything else until you have gone through M-VAVE's official V15. We haven't found a strong reason for that: this page installs any valid package over whatever firmware answers it. The two refusals seen so far (a package bigger than V15's, and a startup-code mismatch) can be got around by installing through a firmware that accepts the package (M-VAVE's V16, or any firmware on a recent fm1-base), or by the restore step, which has not been tried on an FM-1 yet.</p>
+      <p>Choose the firmware you want to end up with. FM-Static checks the file and the device’s current state instead of imposing a blanket V15 prerequisite. When a supported route needs an intermediate step, the page handles it: optional cleanup runs V15 temporarily to prepare saved data, then installs your chosen firmware. An official-firmware refusal can use a different, compatible temporary updater. The device must accept each pass and return the expected identity before the next step starts.</p>
       <p>If you want V15: <a href="https://web.archive.org/web/20260906194826id_/https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc" target="_blank" rel="noopener">Download official V15 (.fwsc, archived copy)</a>. Then choose the downloaded file in Firmware file. This is the original M-VAVE package; the manufacturer’s current download URL now serves V16.</p>
     </details>
   </section>
@@ -136,7 +136,7 @@
         <li id="wipe-row" class="cp" data-state="option" hidden>
           <span class="plate"><span>OPTION</span></span>
           <div>
-            <b>Wipe application/data area</b>
+            <b>Application/data cleanup</b>
             <p>Usually unnecessary—try a normal install first. This optional extended wipe is offered for convenience and may be worth trying if a normal flash fails.</p>
             <p><label><input id="wipe" type="checkbox"> Clean application/data areas before installing</label></p>
             <p id="wipe-method" class="warn"></p>
@@ -182,7 +182,7 @@
             <span class="plate"><span>RESTORE</span></span>
             <div>
           <h3>Restore official startup code</h3>
-          <p class="warn">If you installed m-bootloader separately, a normal firmware file usually cannot supply the startup bytes now on your device. Try the compatible-updater route below before this workaround.</p>
+          <p class="warn">If you installed m-bootloader separately, a normal firmware file usually cannot supply the startup bytes now on your device. Try <b>Install through a temporary updater</b> above before this workaround.</p>
           <p><b>Return to stock through a compatible updater:</b> use <a href="#bridge-row">Install through a temporary updater</a> above. It installs the generic fm1-base template first, then your selected official firmware. This completed on an FM-1 after reproducing the four-request V15 refusal with Optimist 0.2 synths and m-bootloader. Installing V15 normally replaces m-bootloader with M-VAVE’s bootloader. <a href="#desktop-recovery">M-Flasher is the desktop alternative</a>.</p>
           <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
             startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
@@ -197,10 +197,7 @@
                 chip's ROM boot mode (WL80UBOOT, USB 4C4A:8057), which does not depend on that flash. This page can recognise that
                 state (the "boot mode" button under Your FM-1) and point you to an open tool, but it cannot write from there, and
                 that way back has not been tested. Treat this mode as one with no undo.</li>
-              <li><b>Not tested on a device.</b> Felucca's source says M-VAVE's updater rewrites that region as part of every update, with bytes equal to what is already there.
-                Writing different bytes over it is outside that. This page's check bypass passes in a host simulation of Felucca-family
-                step-1 code; the write itself has not been run on an FM-1, and M-VAVE's loader is closed, so a check
-                inside it can't be ruled out.</li>
+              <li><b>This workaround is not device-tested.</b> Its startup-byte substitution passes a host simulation. Successful normal installs and guided cleanup test different routes; they do not validate this separate check bypass.</li>
               <li id="risk-data" hidden><b>This package can overwrite saved data.</b> Its flash.bin is larger than V15's, so the
                 loader also overwrites flash above 0x93000, where Felucca-family firmwares keep saved projects. V15 itself stops
                 at 0x93000 and leaves them.</li>
@@ -239,30 +236,31 @@
       <li>
         <div class="wf-node"><span class="wf-number" aria-hidden="true">2</span><h3>Find your FM-1</h3><p>Connect over MIDI. Check the device's answer against the package.</p></div>
         <div class="wf-branches">
-          <div class="wf-detour"><h4>Unfamiliar port name?</h4><p>Pick your port and press Try. Other ports are left alone.</p></div>
+          <div class="wf-detour"><h4>Unfamiliar port name?</h4><p>Pick your port and press Check this port. Other ports are left alone.</p></div>
           <div class="wf-detour wf-untried"><h4>Wrong model?</h4><p>Stop. Choose a package for that device.</p></div>
           <div class="wf-detour wf-untried"><h4>Nothing answers?</h4><p>Check the cable, close other MIDI apps, then use the boot-mode check or <a href="#desktop-recovery">recovery tools</a>.</p></div>
         </div>
       </li>
       <li>
-        <div class="wf-node"><span class="wf-number" aria-hidden="true">3</span><h3>Prepare the install</h3><p>Back up what you need. Choose the optional area wipe or bootloader install.</p></div>
+        <div class="wf-node"><span class="wf-number" aria-hidden="true">3</span><h3>Prepare the install</h3><p>Back up what you need. Choose optional cleanup or a bootloader install.</p></div>
         <div class="wf-branches">
           <div class="wf-detour"><h4>M-VAVE Open firmware?</h4><p>The page arms its updater with the package hash. Return to M-VAVE firmware first if it will not accept your chosen package.</p></div>
           <div class="wf-detour"><h4>What gets overwritten?</h4><p>Layout Analysis shows expected writes: optional cleanup covers below 0xBA000 plus valid voice data at 0xEA000–0xEE000. It is not a full reset.</p></div>
         </div>
       </li>
       <li>
-        <div class="wf-node"><span class="wf-number" aria-hidden="true">4</span><h3>Install and check</h3><p>The device checks the package, writes it and restarts. The page checks the returned identity.</p></div>
+        <div class="wf-node"><span class="wf-number" aria-hidden="true">4</span><h3>Install and check</h3><p>The device checks, writes and restarts. The page verifies its identity, then scans again to find it.</p></div>
         <div class="wf-branches">
-          <div class="wf-detour"><h4>Package refused?</h4><p>Read the refusing checkpoint. Use a compatible package or return to stock first.</p></div>
-          <div class="wf-detour"><h4>Official firmware refused?</h4><p>Install through the generic temporary updater, then your selected firmware. Both identities are checked. Tested from Optimist 0.2 synths with m-bootloader back to V15.</p></div>
-          <div class="wf-detour wf-untried"><h4>Startup-code refusal?</h4><p>The opt-in restore step offers another route. Read its risks before proceeding.</p></div>
+          <div class="wf-detour"><h4>Package refused?</h4><p>Read the refusing checkpoint and follow its next step. A supported intermediate route can keep your final selection loaded.</p></div>
+          <div class="wf-detour"><h4>Official firmware refused?</h4><p>Use the hash-checked temporary updater, then install your selected official firmware. Both identities are checked. This route does not add cleanup.</p></div>
+          <div class="wf-detour wf-untried"><h4>Startup-code refusal?</h4><p>Try the temporary-updater route first when offered. The separate startup-code restore remains an untested, opt-in workaround.</p></div>
           <div class="wf-detour wf-untried"><h4>Write interrupted?</h4><p>If the update loader still answers, reconnect and use Finish update.</p></div>
-          <div class="wf-detour"><h4>Extended cleanup?</h4><p>V15 is a temporary maintenance step: apply valid voice data beyond the firmware’s reach, then wipe and install your chosen firmware. The complete sequence must finish.</p></div>
-          <div class="wf-detour"><h4>Bootloader selected?</h4><p>Offered for reviewed compatible releases only; skipped with a wipe.</p></div>
+          <div class="wf-detour"><h4>Extended cleanup?</h4><p>Reach V15 → apply valid voice data → wipe and install your chosen firmware. Skip the V15 install if it already runs. Every data write must be acknowledged.</p></div>
+          <div class="wf-detour"><h4>Bootloader selected?</h4><p>Offered for reviewed compatible releases on normal installs; skipped with cleanup or a temporary-updater sequence.</p></div>
         </div>
       </li>
     </ol>
+    <p class="small">Keep this page open through a sequence. If it stops, refresh devices and select the same FM-1 to retry the current step. An incomplete data step rewrites all four banks before the final install. <a href="#tested-routes">See the tested routes and limits</a>.</p>
     <div class="wf-exit"><h3>Still stuck?</h3><p>Choose your next route in Backup &amp; Recovery: official updater, ROM-mode recovery, or the external Transporter hardware approach.</p><a href="#desktop-recovery">Go to backup and recovery tools</a></div>
   </section>
   </div>
@@ -273,7 +271,7 @@
     <p>Inspect firmware, a flash backup, or both. Files stay in your browser. This tab does not connect to the FM-1, create backups or restore them.</p>
     <p id="analysis-source" class="small" role="status">Choose firmware in the shared Firmware file panel, or inspect a backup on its own.</p>
       <div id="flash-plan" class="flash-inspection" hidden>
-        <h3>Expected firmware writes</h3>
+        <h3>Expected writes</h3>
         <div id="flash-map"></div>
         <div class="flash-scale" aria-hidden="true"><code>0x00000</code><span>1 MiB flash</span><code>0x100000</code></div>
         <ul id="flash-ranges" class="flash-ranges"></ul>
@@ -301,7 +299,7 @@
       <ol class="workflow analysis-workflow" aria-label="Layout analysis workflow">
         <li><div class="wf-node"><span class="wf-number" aria-hidden="true">1</span><h4>Choose files</h4><p>Choose firmware in the shared panel, a raw backup here, or both.</p></div></li>
         <li><div class="wf-node"><span class="wf-number" aria-hidden="true">2</span><h4>Read the layout</h4><p>Check file integrity and show the regions declared in the tables.</p></div></li>
-        <li><div class="wf-node"><span class="wf-number" aria-hidden="true">3</span><h4>Compare</h4><p>With both files, compare layouts, bytes and complete sectors.</p></div></li>
+        <li><div class="wf-node"><span class="wf-number" aria-hidden="true">3</span><h4>Compare</h4><p>With both files, compare layouts and available bytes and sectors. Cleanup data is mapped but excluded from byte comparison.</p></div></li>
         <li><div class="wf-node"><span class="wf-number" aria-hidden="true">4</span><h4>Review findings</h4><p>No device connection. No flash writes. No backup restore.</p></div></li>
       </ol>
     </div>
@@ -325,7 +323,7 @@
       <details>
         <summary>MIDI still answers, or an update was interrupted</summary>
         <p>If the update loader answers, keep the same firmware file loaded and use <b>Finish update</b>. For a two-pass operation, keep this page open so it retains the package for the interrupted pass.</p>
-        <p>If normal firmware answers but refuses V15 after four requests, try <b>Install through a temporary updater</b> on Flash. You do not need ROM download mode for that route.</p>
+        <p>If normal firmware answers but refuses V15 after four requests, try <b>Install through a temporary updater</b> on Flash. m-bootloader alone does not determine whether an update is accepted: the running firmware’s updater matters. You do not need ROM download mode for that route.</p>
         <p><b>Optimist only:</b> if the application will not start, hold <b>OCT− alone while switching on</b> for its USB rescue screen, then reconnect to a MIDI installer. This is an application rescue mode, not ROM download mode. <a href="https://github.com/w0ts/optimist#getting-back" target="_blank" rel="noopener">Optimist’s recovery instructions</a>.</p>
       </details>
       <details>
@@ -352,7 +350,7 @@
       <details id="factory-voices" tabindex="-1">
         <summary>V15 runs, but its presets sound wrong</summary>
         <p>A successful firmware install is not a factory reset. Community firmware such as Optimist uses storage that V15 expects to hold its voice banks. Installing V15 alone leaves that sound data in place.</p>
-        <p>The optional <b>Wipe application/data area</b> route uses V15 as a temporary maintenance step. It applies valid data to the 16 KiB saved-voice region, then continues to your chosen firmware.</p>
+        <p>The optional <b>Application/data cleanup</b> route uses V15 as a temporary maintenance step. It applies valid data to the 16 KiB saved-voice region, then continues to your chosen firmware.</p>
         <p class="warn">This replaces all 128 stored voices and also erases below 0xBA000. The extra region at 0xEA000–0xEE000 overlaps sequence data and Bluetooth pairings in V16. It does not reset the whole flash or every setting.</p>
         <p class="small"><a href="https://open.m-vave.com/fm1-workbench" target="_blank" rel="noopener">M-VAVE’s Open Workbench</a> is an alternative for the bank set embedded in the official firmware package.</p>
       </details>
@@ -400,7 +398,7 @@
             <th scope="row" role="rowheader">V15-first gating</th>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Force-update override</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Varies; some enforce V15 first</span></div></td>
-            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Unrestricted; device state checked</span></div></td>
+            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">No blanket gate; guided V15 step</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="supported" data-tool="mflasher"><span class="feature-mark status-supported tool-mflasher"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description"><a class="feature-provider" href="https://github.com/jvitkauskas/m-flasher" target="_blank" rel="noopener">M-Flasher</a>No V15 prerequisite</span></div><div class="feature-value" data-status="supported" data-tool="unbricker"><span class="feature-mark status-supported tool-unbricker"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description"><a class="feature-provider" href="https://github.com/Quixotic7/MvaveFM1Unbricker" target="_blank" rel="noopener">Unbricker</a>No V15 prerequisite</span></div></td>
           </tr>
         </tbody>
@@ -410,7 +408,7 @@
             <th scope="row" role="rowheader">Find an FM-1 with an unfamiliar port name</th>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Force mode searches paired ports</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Varies; fixed name list in Felucca</span></div></td>
-            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Try a specific port; save its name</span></div></td>
+            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Check a specific port; save its name</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">M-Flasher: native USB discovery instead</span></div></td>
           </tr>
           <tr role="row">
@@ -428,6 +426,13 @@
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">M-Flasher / Unbricker: package and USB diagnostics</span></div></td>
           </tr>
           <tr role="row">
+            <th scope="row" role="rowheader">Guided intermediate install for refused official firmware</th>
+            <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Stock-return route; different approach</span></div></td>
+            <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Varies; stock-return flow in Felucca</span></div></td>
+            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Hash-checked temporary updater; both identities verified</span></div></td>
+            <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">M-Flasher / Unbricker: ROM recovery bypasses the running updater</span></div></td>
+          </tr>
+          <tr role="row">
             <th scope="row" role="rowheader">Guided startup-code restore workaround</th>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="unavailable"><span class="feature-mark status-unavailable"><span aria-hidden="true">—</span><span class="sr-only">Not provided:</span></span><span class="feature-description"></span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="unavailable"><span class="feature-mark status-unavailable"><span aria-hidden="true">—</span><span class="sr-only">Not provided:</span></span><span class="feature-description">Not in the Felucca reference</span></div></td>
@@ -442,17 +447,17 @@
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">M-Flasher / Unbricker: ROM route avoids the MIDI updater</span></div></td>
           </tr>
           <tr role="row">
-            <th scope="row" role="rowheader">Optional application/data wipe</th>
+            <th scope="row" role="rowheader">Optional application/data cleanup</th>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Stock voice restore; different scope</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Firmware-dependent</span></div></td>
-            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Wipe below 0xBA000 and apply valid voice data beyond it, then install</span></div></td>
+            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Temporary V15 → valid voice data → selected firmware + area wipe</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">M-Flasher: settings wipe covers different regions</span></div></td>
           </tr>
           <tr role="row">
             <th scope="row" role="rowheader">Preview which regions an install will write</th>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Package details only</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="unavailable"><span class="feature-mark status-unavailable"><span aria-hidden="true">—</span><span class="sr-only">Not provided:</span></span><span class="feature-description">Not shown by the Felucca reference</span></div></td>
-            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Firmware, wipe and bootloader regions</span></div></td>
+            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Firmware, cleanup data and bootloader regions</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="supported" data-tool="mflasher"><span class="feature-mark status-supported tool-mflasher"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description"><a class="feature-provider" href="https://github.com/jvitkauskas/m-flasher" target="_blank" rel="noopener">M-Flasher</a>Live flash map</span></div></td>
           </tr>
           <tr role="row">
@@ -509,11 +514,19 @@
           </tr>
         </tbody>
       </table>
-      <p class="small comparison-intro">The manufacturer and current Felucca installer also check the returning firmware identity and offer interrupted-update retries. FM-Static’s Finish update path is implemented but not yet device-tested. Its extra help includes selectable ports, explanations for known refusals, and an opt-in startup-code restore.</p>
+      <p class="small comparison-intro">The manufacturer and current Felucca installer also check the returning firmware identity and offer interrupted-update retries. FM-Static’s Finish update path is implemented but not yet device-tested. Its extra help includes selectable ports, guided intermediate installs, automatic data cleanup when selected, and explanations for known refusals. The separate startup-code restore remains an untested workaround.</p>
       <div id="comparison-notes" class="comparison-notes">
-        <p><b>About the V15 gate.</b> Choose your next firmware directly. FM-Static checks the connected device and package without imposing a V15-first step. Community installers vary: some enforce that step, others do not. The device can still refuse an incompatible package. Our optional area wipe uses a V15 file as a template, and installs V15 temporarily when needed; you do not need to install it yourself.</p>
-        <p><b>Where the browser stops.</b> This page can inspect a raw backup but cannot read or restore the device’s whole flash. Its MIDI updater cannot replace native access to the chip’s protected USB mass-storage interface. Transporter uses a separate hardware bridge and its own app. <a href="#desktop-recovery">Choose a backup or recovery tool</a>.</p>
+        <p><b>About the V15 gate.</b> Choose the firmware you want to end up with. FM-Static checks the connected device and package instead of imposing a blanket V15 prerequisite. When optional cleanup needs V15, the page installs it temporarily and continues to your selection. A refused official package can use the separate temporary-updater route. These steps depend on the process and device state; the device can still refuse a pass.</p>
+        <p><b>Where the browser stops.</b> This page can inspect a raw backup but cannot read or restore the device’s whole flash. Whole-flash reset is not implemented. The current MIDI updater does not provide the native flash access used by desktop recovery tools. Transporter uses a separate hardware bridge and its own app. <a href="#desktop-recovery">Choose a backup or recovery tool</a>.</p>
       </div>
+      <details id="tested-routes" class="comparison-sources" tabindex="-1"><summary>Device-tested routes and limits</summary>
+        <ul>
+          <li><b>Direct stock return:</b> LOOM-8 0.9 with m-bootloader 1.2 accepted official V15 directly.</li>
+          <li><b>Refused stock return:</b> Optimist 0.2 synths with m-bootloader refused ordinary V15 after four requests. The guided temporary-updater route completed the return to V15.</li>
+          <li><b>Cleanup:</b> with 386DX FM-1_3860070 selected, Optimist 0.2 synths with m-bootloader reached temporary V15, acknowledged all four data-bank writes, then completed the wipe and 386DX install. Starting on V15 also completed data cleanup and installation of Optimist 0.2.</li>
+        </ul>
+        <p class="small">These are specific releases and paths, not a promise for every firmware. The final identity was verified and rediscovered automatically. Data acknowledgements are not readback or sound verification. Interrupted-update completion and the separate startup-code restore remain untested on hardware.</p>
+      </details>
       <details class="comparison-sources"><summary>Comparison sources and limits</summary>
         <p class="after small">Based on the linked pages and their shipped source, not a fresh hardware test of those tools. Features may change. A checkmark does not promise that every firmware or device state is compatible.</p>
         <ul>
@@ -552,8 +565,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.18</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.19</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.18"></script>
+<script type="module" src="src/app.js?v=2026-10-26.19"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
-import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.18";
-import { sha256hex } from "./fm1pkg.js?v=2026-10-26.18";
+import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.19";
+import { sha256hex } from "./fm1pkg.js?v=2026-10-26.19";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -121,7 +121,7 @@ export function setupFlashView() {
         info.append(el("p", `${s.compared} complete 4 KiB sectors compared: ${s.matching} match, ${s.different} differ. ${s.erased} of these sectors are all 0xFF (erased) in the backup.`));
         info.append(el("p", "An erased or different sector alone does not prove a failed update; padding, another firmware or saved data can also explain it.", "small"));
       }
-      info.append(el("p", "This compares two files, not the live FM-1. It excludes staging and cleanup writes and does not predict which sectors the loader will skip.", "small"));
+      info.append(el("p", "This compares two files, not the live FM-1. It excludes staging and update-record housekeeping and does not predict which sectors the loader will skip. The optional voice-data region is mapped, but its payload is not compared.", "small"));
     } else info.append(el("p", "Choose firmware in the shared Firmware file panel to compare its layout and expected write bytes with this backup."));
     const details = el("details"), summary = el("summary", "Backup region table"); details.append(summary);
     details.append(backup.regions.length ? table(backup.regions, plan) : el("p", "No validated physical ranges could be read from the file tables."));

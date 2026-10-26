@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.18";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.18";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.18";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.18";
-import { setupTabs } from "./tabs.js?v=2026-10-26.18";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.18";
-import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.18";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.19";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.19";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.19";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.19";
+import { setupTabs } from "./tabs.js?v=2026-10-26.19";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.19";
+import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.19";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.18";
+const VERSION = "2026-10-26.19";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
