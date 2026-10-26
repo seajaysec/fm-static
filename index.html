@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.19">
+<link rel="stylesheet" href="style.css?v=2026-10-26.20">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -98,7 +98,7 @@
       <p id="none" class="dim" hidden>Nothing answered under a usual FM-1 port name. Pick your FM-1 in the port list below. If your FM-1 runs m-bootloader, holding PLAY while switching on opens its recovery menu. REC enters USB download mode for desktop tools; it is not this page’s MIDI update mode.</p>
       <details>
         <summary>Available MIDI ports</summary>
-        <p class="small">These input/output ports are reported as available by your browser. A port can belong to software or a MIDI interface; its name alone does not prove a physical FM-1 is connected. Usual FM-1 names are checked automatically. Other ports are sent nothing until you choose <b>Check this port</b>.</p>
+        <p class="small">These input/output ports are reported as available by your browser. A port can belong to software or a MIDI interface; its name alone does not prove a physical FM-1 is connected. Usual FM-1 names are checked automatically. Choose <b>Check this port</b> before this page sends anything to another port.</p>
         <ul id="ports" class="plain"></ul>
         <p id="ports-empty" class="small dim" hidden>No other available input/output pairs. If your FM-1 is missing, check power and use a USB cable that carries data.</p>
         <details>
@@ -254,7 +254,7 @@
           <div class="wf-detour"><h4>Package refused?</h4><p>Read the refusing checkpoint and follow its next step. A supported intermediate route can keep your final selection loaded.</p></div>
           <div class="wf-detour"><h4>Official firmware refused?</h4><p>Use the hash-checked temporary updater, then install your selected official firmware. Both identities are checked. This route does not add cleanup.</p></div>
           <div class="wf-detour wf-untried"><h4>Startup-code refusal?</h4><p>Try the temporary-updater route first when offered. The separate startup-code restore remains an untested, opt-in workaround.</p></div>
-          <div class="wf-detour wf-untried"><h4>Write interrupted?</h4><p>If the update loader still answers, reconnect and use Finish update.</p></div>
+          <div class="wf-detour wf-untried"><h4>Write interrupted?</h4><p>If the update loader still answers, reconnect and use Finish update with the same package — unless that loader is Felucca-family and the package is larger than the stock app area (Baud Girl–sized): finishing then truncates. Close DAWs that send MIDI while you finish.</p></div>
           <div class="wf-detour"><h4>Extended cleanup?</h4><p>Reach V15 → apply valid voice data → wipe and install your chosen firmware. Skip the V15 install if it already runs. Every data write must be acknowledged.</p></div>
           <div class="wf-detour"><h4>Bootloader selected?</h4><p>Offered for reviewed compatible releases on normal installs; skipped with cleanup or a temporary-updater sequence.</p></div>
         </div>
@@ -322,13 +322,16 @@
       <h3>Get back to working firmware</h3>
       <details>
         <summary>MIDI still answers, or an update was interrupted</summary>
-        <p>If the update loader answers, keep the same firmware file loaded and use <b>Finish update</b>. For a two-pass operation, keep this page open so it retains the package for the interrupted pass.</p>
+        <p>If the update loader answers, keep the same firmware file loaded and use <b>Finish update</b> when that loader can write the whole package. For a two-pass operation, keep this page open so it retains the package for the interrupted pass.</p>
+        <p class="warn"><b>Baud Girl–sized packages:</b> a Felucca-family update loader writes only through the stock app area (0x93000). Finishing a larger image there truncates it and can leave the FM-1 dark. This page refuses that combination. Install official V15 (or use cleanup here), then that firmware with M-VAVE’s loader or its own installer.</p>
+        <p>Close other apps that send MIDI to the FM-1 while you install or finish: a DAW’s clock alone can stall SysEx. Do not power-cycle twice in a row while it is in update mode — the second start with no normal boot in between drops into the chip’s ROM USB boot (WL82 UBOOT1.00).</p>
         <p>If normal firmware answers but refuses V15 after four requests, try <b>Install through a temporary updater</b> on Flash. m-bootloader alone does not determine whether an update is accepted: the running firmware’s updater matters. You do not need ROM download mode for that route.</p>
+        <p>Some firmwares (for example Bubba Machine) accept only M-VAVE’s own package: use that firmware’s path back to V15 before installing anything else here.</p>
         <p><b>Optimist only:</b> if the application will not start, hold <b>OCT− alone while switching on</b> for its USB rescue screen, then reconnect to a MIDI installer. This is an application rescue mode, not ROM download mode. <a href="https://github.com/w0ts/optimist#getting-back" target="_blank" rel="noopener">Optimist’s recovery instructions</a>.</p>
       </details>
       <details>
         <summary>No MIDI reply: enter ROM download mode</summary>
-        <p>Use the method for what is installed. There is no universal FM-1 button combination.</p>
+        <p>Use the method for what is installed. There is no universal FM-1 button combination. A cut during an install that left official V15 often ends here rather than in MIDI update mode: stock V15 stages its update loader where Felucca-family rescue stubs do not look.</p>
         <ul>
           <li><b>Working stock or Felucca firmware:</b> use M-Flasher’s <b>DOWNLOAD MODE</b> action over USB MIDI.</li>
           <li><b>m-bootloader installed:</b> hold <b>REC while switching on</b>. Holding PLAY instead opens its recovery menu.</li>
@@ -565,8 +568,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.19</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.20</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.19"></script>
+<script type="module" src="src/app.js?v=2026-10-26.20"></script>
 </body>
 </html>

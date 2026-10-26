@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.19";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.19";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.19";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.19";
-import { setupTabs } from "./tabs.js?v=2026-10-26.19";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.19";
-import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.19";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.20";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.20";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.20";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.20";
+import { setupTabs } from "./tabs.js?v=2026-10-26.20";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.20";
+import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.20";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.19";
+const VERSION = "2026-10-26.20";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -44,11 +44,11 @@ let shown = -1;
 const progress = (pct, label) => { state.progress = pct == null ? null : { pct, label }; const k = pct == null ? -1 : Math.round(pct); if (k !== shown) { shown = k; renderRoute(); } };
 
 const MESSAGES = {
-  notfound: "No FM-1 answered. Use a USB data cable, close other apps that use MIDI, and pick its port in the list if it shows up under another name.",
+  notfound: "No FM-1 answered. Use a USB data cable, close other apps that send MIDI to the FM-1 (a DAW’s clock is enough to stall SysEx), and pick its port in the list if it shows up under another name.",
   model: "That device is not the model this package is for.",
-  lost: "The USB connection was lost. Replug it; the page will find it again. If the FM-1 is in update mode, press Finish update.",
+  lost: "The USB connection was lost. Replug it; the page will find it again. If the FM-1 is in update mode, press Finish update only with a package that loader can write whole.",
   noloader: "The update loader did not appear. Replug the USB cable; the FM-1 stays in update mode until it is finished, then press Finish update.",
-  noreturn: "The FM-1 did not come back on its own. Power-cycle it, then press Rescan.",
+  noreturn: "The FM-1 did not come back on its own. Power-cycle it once, then press Rescan. A second power-cycle with no normal boot in between can drop it into the chip’s ROM USB boot.",
   stopped: "The device stopped answering. Replug it and press Install again.",
 };
 
@@ -65,6 +65,27 @@ const loaderText = {
   unknown: "Not one this page recognises.",
 };
 
+// Felucca-family update mode (ota-FM-1_7xx / _9xx). Not M-VAVE Open's ota-FM1C_ loader.
+const feluccaFamilyOta = (id) => {
+  if (!id || !IS_OTA(id)) return false;
+  if (/^ota-FM1C_/i.test(id.text || "")) return false;
+  if (typeof id.version === "number" && id.version >= 700) return true;
+  return /^ota-FM-1_[7-9]/i.test(id.text || "");
+};
+
+// Baud Girl–sized images past the stock app area: an app-area-only writer truncates them and can leave the FM-1 dark
+// (seen when a stopover firmware answered like stock so Baud Girl's installer proceeded, then wrote only through 0x93000).
+function truncateRisk(pkg, dev) {
+  if (!pkg || !dev || pkg.flashLen <= APP_END) return "";
+  if (pkg.loader === "app") {
+    return `This package’s flash.bin reaches ${hex(pkg.flashLen)}, past the stock app area (${hex(APP_END)}), but it carries an app-area-only update loader. That loader cannot write the whole image; finishing the write can leave the FM-1 unable to start. Use a package that carries M-VAVE’s update loader, or install through official V15.`;
+  }
+  if (feluccaFamilyOta(dev.id)) {
+    return `The FM-1 is in Felucca-family update mode (${dev.id.text}). That loader writes only through ${hex(APP_END)}. This package reaches ${hex(pkg.flashLen)} (the shape of Baud Girl). Finishing the write here truncates the image and can leave the FM-1 dark. Do not use Finish update with this file. Recover with a desktop tool, or finish a stock-sized package first, then install this firmware through M-VAVE’s loader (official V15, this page’s cleanup route, or that firmware’s own installer).`;
+  }
+  return "";
+}
+
 // What the header can and cannot say about who made a package. Identity numbers and sizes are all there is: no maker
 // string is in any package inspected, so a name is only ever offered as "the shape of".
 function shapeText(pkg) {
@@ -72,7 +93,7 @@ function shapeText(pkg) {
   if (pkg.product === "FM-1_015") return "This file claims to be V15, but its SHA-256 does not match the verified official V15. It cannot be used as the V15 wipe template or as V15 in the temporary-updater route.";
   if (pkg.kind === "mvave") return `The shape of an M-VAVE release (${pkg.product}): M-VAVE's loader and V15's package layout. Only V15's own hash is known to this page.`;
   if (pkg.loader === "official" && pkg.flashLen > APP_END)
-    return `Recognised: the shape of a Baudgirl release (M-VAVE's loader, app area up to ${hex(pkg.flashLen)} against V15's ${hex(APP_END)}; true of every one inspected, though the header carries no maker name). `;
+    return `Recognised: the shape of a Baudgirl release (M-VAVE's loader, app area up to ${hex(pkg.flashLen)} against V15's ${hex(APP_END)}; true of every one inspected, though the header carries no maker name). Only M-VAVE’s loader writes past ${hex(APP_END)}. Baud Girl’s own installer refuses Felucca-family update mode for that reason; do not Finish update into a Felucca-family loader with this file.`;
   if (pkg.loader === "app")
     return "A Felucca-family package. Several firmwares share this structure, so the file cannot say which one it is.";
   return "No known shape.";
@@ -109,18 +130,23 @@ function devChecks(dev, pkg) {
       add("detour", "BYPASSED", `Port “${dev.name}”`, "That is not a usual FM-1 name. An updater that finds the FM-1 by name could have reported it missing. This page found it by asking the port who it is.");
     } else add("go", "CLEAR", `Port “${dev.name}”`, "Answered the FM-1 identity query.");
     if (IS_OTA(dev.id)) {
-      add("info", "SEEN", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish update writes the package to it.`);
+      add("info", "SEEN", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish update continues the same write when the package fits this loader. Close other apps that send MIDI to the FM-1 while you finish. Do not power-cycle twice in a row in update mode: the second start with no normal boot in between drops into the chip’s ROM USB boot (WL82 UBOOT1.00).`);
     } else {
       const fam = family(dev.id);
-      if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point installers expect.");
+      if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point installers expect. A cut during the write into another firmware often ends in the chip’s ROM USB boot rather than MIDI update mode: stock V15 stages its update loader where Felucca-family rescue stubs do not look.");
       else if (fam === "open") add("info", "SEEN", `Running ${dev.id.text}`, "M-VAVE's Open firmware. Its updater takes only a package it has been told about first: this page tells it the package's SHA-256, and it accepts only M-VAVE's own FM-1 firmware. To install anything else, put M-VAVE's own firmware back first.");
       else add("detour", "BYPASSED", `Running ${dev.id.text}`,
         `${familyText[fam][0].toUpperCase()}${familyText[fam].slice(1)}. An installer that only starts from official V15 or its own releases could have stopped here. This page does not stop.`);
+      if (fam === "app" && pkg && pkg.loader === "official" && pkg.flashLen > APP_END) {
+        add("info", "SEEN", "Large image over Felucca-family firmware", `This package reaches ${hex(pkg.flashLen)}. When the running firmware accepts it, it should stage this package’s M-VAVE loader, which can write the whole image. If step 1 refuses, or if you are already in Felucca-family update mode, do not force the write: install official V15 first (or use cleanup on this page), then this file.`);
+      }
     }
     if (pkg && unverified(pkg) && !$("trust").checked)
       add("idle", "WAITING", "Source not confirmed", "Install appears once you confirm, in the box under the file's checks, that the file comes from a source you trust.");
     if (pkg && !IS_OTA(dev.id) && dev.id.model !== pkg.model)
       add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
+    const trunc = pkg ? truncateRisk(pkg, dev) : "";
+    if (trunc) add("barrier", "STOP", "Image larger than this update loader", trunc);
   }
   if (!out.length) add("idle", "WAITING", "No FM-1 selected", "Pick your FM-1 above, or press Rescan.");
   return out;
@@ -779,6 +805,7 @@ function refresh() {
   updateTabs(state.busy);
   const dev = selectedDevice(), pkg = state.pkg;
   const resume = dev && IS_OTA(dev.id);
+  const active = (state.sequence && state.sequence.passes[state.sequence.at]) || pkg;
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
   let why = "";
   if (state.scanning || scanAgain) why = "Checking the current MIDI devices.";
@@ -788,6 +815,7 @@ function refresh() {
   else if (!dev) why = "Waiting for an FM-1 to be selected above.";
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (unverified(pkg) && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
+  else if (active && truncateRisk(active, dev)) why = "This package is larger than the update loader now on the FM-1 can write. Details on the route above.";
   $("go").textContent = state.sequence ? `${resume ? "Finish" : "Retry"} ${state.sequence.kind === "bridge" ? "install" : "wipe"} pass ${state.sequence.at + 1} of ${state.sequence.passes.length}` : resume ? "Finish update" : wipeOn() ? "Start cleanup and install" : "Install";
   $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock) || (!resume && !$("backup").checked);
   const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400 && (pkg.loader !== "app" || pkg.flashLen === APP_END);
@@ -865,10 +893,13 @@ async function install(startup = null, throughBridge = false) {
   const sequenced = !!state.sequence || doWipe || throughBridge, doBoot = !resume && !sequenced && bootOn();
   if (sequenced && multipleFM1s()) { say("Disconnect other FM-1s and refresh devices before starting or continuing a two-pass operation.", "err"); return; }
   if (doWipe && state.stock?.kind !== "stock") { say("Choose the verified official V15 package for the wipe template first.", "err"); return; }
+  const early = (state.sequence && state.sequence.passes[state.sequence.at]) || pkg;
+  const trunc = truncateRisk(early, dev);
+  if (trunc) { say(trunc, "err"); note("barrier", "STOP", "Image larger than this update loader", trunc); return; }
   returnCheck++;
   state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();
-  say(throughBridge && !state.sequence ? "Downloading and checking the temporary updater. No installation has started yet." : "Preparing the installation…");
+  say(throughBridge && !state.sequence ? "Downloading and checking the temporary updater. No installation has started yet." : "Preparing the installation. Close other apps that send MIDI to the FM-1…");
   const up = new Updater(state.access, log);
   up.setPatterns(state.up.patterns);
   up.select(dev.name);
@@ -920,6 +951,9 @@ async function install(startup = null, throughBridge = false) {
         total = Math.max(1, Math.round(sent.image.length / 512));
         phase = `${run.kind === "bridge" ? "Install" : "Wipe"} pass ${run.at + 1} of ${run.passes.length}`;
         const bridge = run.passes.length === 2 && run.at === 0;
+        const now = selectedDevice();
+        const passRisk = now && truncateRisk(sent, now);
+        if (passRisk) { note("barrier", "STOP", "Image larger than this update loader", passRisk); throw Object.assign(new Error(passRisk), { code: "stopped" }); }
         note("info", "PASS", phase, run.kind === "bridge" ? (bridge
           ? "Installing the reviewed fm1-base template 0.3 with its application-only writer, preserving startup code. Waiting for its identity before installing your selected firmware."
           : `The temporary updater answered. Installing your selected ${pkg.product} package normally, without an extended wipe or m-bootloader installation.`) : bridge
