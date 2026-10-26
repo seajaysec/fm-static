@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT OR GPL-3.0-only
+# Copyright (C) 2026 Chris Farrell
 # Copies fm1-base's update protocol, package reader and m-bootloader installer into vendor/fm1-base/ unmodified, and records the
 # commit in vendor/fm1-base/SOURCE. The copies are never edited here; what fm-static adds lives in src/updater.js.
 # Usage: tools/sync-base.sh [path to a fm1-base checkout]   (default: a fresh shallow clone of its main branch)

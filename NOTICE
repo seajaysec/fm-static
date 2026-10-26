@@ -1,10 +1,36 @@
 fm-static
 Copyright (C) 2026 Chris Farrell
 
-fm-static is free software: you can redistribute it and/or modify it under the terms of the
-GNU General Public License, version 3 only, as published by the Free Software Foundation.
-It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-FITNESS FOR A PARTICULAR PURPOSE. See LICENSE for the full text.
+The page, as shipped, is free software under the GNU General Public License, version 3 only
+(LICENSE). That is the least restrictive licence the whole program can be offered under: src/fm1pkg.js
+is modified from Felucca's web/fm1pkg.js, Copyright (C) 2026 Leo Kuroshita, Hügelton Instruments,
+GPL-3.0-only, and the page loads that file. It stays GPL-3.0-only. It is distributed WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+MIT, for Chris Farrell's own files, every version
+-------------------------------------------------
+Chris Farrell grants the MIT licence below for his copyright in this project, in every revision from
+the first commit, in addition to the GPL-3.0-only terms those revisions were already distributed under.
+The grant covers the files whose copyright is only his, including index.html, style.css, src/app.js,
+src/updater.js, src/ports.js, the tools, and this project's own documentation. It does not cover
+src/fm1pkg.js, and it does not withdraw the GPL from any copy already received.
+
+Copyright (C) 2026 Chris Farrell
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Lineage
 -------
@@ -13,10 +39,9 @@ Charles Vestal and Leo Kuroshita, licensed MPL-2.0 (vendor/fm1-base/LICENSE-MPL-
 (fm1ota.js) and the package reader (fm1pkg.js), and m-bootloader 1.2's installer package by Julius Vitkauskas
 (vendor/fm1-base/m-bootloader/, MIT, with its licence). vendor/fm1-base/SOURCE names the commit they come from. Both
 descend from Felucca's web installer (https://github.com/hugelton/Felucca) by Leo Kuroshita, GPL-3.0-only. src/updater.js
-builds on them; the packaging code in src/fm1pkg.js (integrity check, hashes) is modified from Felucca's web/fm1pkg.js,
-and each file says what was changed.
-The rest of fm-static is new code under the same
-licence.
+builds on the MPL-2.0 files and is Chris Farrell's; the packaging code in src/fm1pkg.js (integrity check, hashes) is
+modified from Felucca's web/fm1pkg.js, and that file says what was changed. Those vendored files keep their own
+licences. MPL-2.0 allows them to be combined with the rest; it does not allow them to be relicensed.
 
 No firmware is included. A .fwsc file chosen on the page is read in the browser and sent only to
 the FM-1 over USB.
