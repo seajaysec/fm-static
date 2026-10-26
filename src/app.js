@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.21";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.21";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.21";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.21";
-import { setupTabs } from "./tabs.js?v=2026-10-26.21";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.21";
-import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.21";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.22";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.22";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.22";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.22";
+import { setupTabs } from "./tabs.js?v=2026-10-26.22";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.22";
+import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.22";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.21";
+const VERSION = "2026-10-26.22";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -159,7 +159,10 @@ function devChecks(dev, pkg) {
       else if (fam === "open") add("info", "SEEN", `Running ${dev.id.text}`, "M-VAVE's Open firmware. Its updater takes only a package it has been told about first: this page tells it the package's SHA-256, and it accepts only M-VAVE's own FM-1 firmware. To install anything else, put M-VAVE's own firmware back first.");
       else add("detour", "BYPASSED", `Running ${dev.id.text}`,
         `${familyText[fam][0].toUpperCase()}${familyText[fam].slice(1)}. An installer that only starts from official V15 or its own releases could have stopped here. This page does not stop.`);
-      if (fam === "app" && pkg && pkg.loader === "official" && pkg.flashLen > APP_END) {
+      if (fam === "app" && pkg && pkg.loader === "official" && pkg.stockHead) {
+        add("detour", "ROUTE", "V15-shaped package over Felucca-family firmware",
+          "This file carries M-VAVE’s loader and V15’s startup head (stock V15, Bubba Machine, and Baudgirl-shaped packages look like this). Felucca-family step 1 compares that head to what’s on the FM-1 and usually refuses. Use Install through a temporary updater below — it reaches a compatible updater first, then installs this file. A normal Install here is the long way around a known refusal.");
+      } else if (fam === "app" && pkg && pkg.loader === "official" && pkg.flashLen > APP_END) {
         add("info", "SEEN", "Large image over Felucca-family firmware", `This package reaches ${hex(pkg.flashLen)}. When the running firmware accepts it, it should stage this package’s M-VAVE loader, which can write the whole image. If step 1 refuses, or if you are already in Felucca-family update mode, do not force the write: install official V15 first (or use cleanup on this page), then this file.`);
       }
       if (!IS_OTA(dev.id) && dev.id.text === "FM-1_003") {

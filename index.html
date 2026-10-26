@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.21">
+<link rel="stylesheet" href="style.css?v=2026-10-26.22">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -126,7 +126,7 @@
           <span class="plate"><span>OPTION</span></span>
           <div>
             <b>Install through a temporary updater</b>
-            <p>Some community updaters reject official firmware when startup code has changed—for example after installing m-bootloader. We can read the running firmware’s identity, but cannot tell from it which bootloader is installed. Try a normal install first; use this route if needed.</p>
+            <p>Use this when the route above says the package is V15-shaped over Felucca-family firmware (stock V15, Bubba Machine, Baudgirl-shaped files), or when a normal Install already stopped at the startup-code check (for example after m-bootloader). Skip the doomed Install and start here.</p>
             <p>Pass 1 installs the generic <a href="https://charlesvestal.github.io/fm1-base/" target="_blank" rel="noopener">fm1-base template 0.3</a>, preserving startup code. Once it answers, pass 2 installs your selected firmware. Your selection stays loaded. No extended wipe or m-bootloader installation is added.</p>
             <p class="warn">This replaces the running application temporarily and can affect saved data. Official firmware then replaces the bootloader. Tested on an FM-1 returning from Optimist 0.2 synths with m-bootloader to verified V15; other starting builds remain unverified. Keep this page open through both passes; reloading loses its recovery state.</p>
             <p><button id="bridge-go" type="button" disabled>Install through temporary updater</button></p>
@@ -568,8 +568,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.21</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.22</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.21"></script>
+<script type="module" src="src/app.js?v=2026-10-26.22"></script>
 </body>
 </html>

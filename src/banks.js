@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // DX7 bulk-bank validation and V15 voice storage. No firmware/update commands.
-import { sha256hex } from "./fm1pkg.js?v=2026-10-26.21";
-import { pack7, unpack7 } from "../vendor/fm1-base/fm1ota.js?v=2026-10-26.21";
+import { sha256hex } from "./fm1pkg.js?v=2026-10-26.22";
+import { pack7, unpack7 } from "../vendor/fm1-base/fm1ota.js?v=2026-10-26.22";
 
 export const FACTORY_BANK_HASHES = [
   "6a46c1eed389a775a1747f4488261c848e9ad43fdec6250ce2c8e004020428f9",
