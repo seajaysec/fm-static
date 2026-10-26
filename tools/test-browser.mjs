@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
-// With the site served locally: node tools/test-browser.mjs V15.fwsc V16.fwsc [app-loader.fwsc] [known-incompatible.fwsc] [reviewed-compatible.fwsc]
+// With the site served locally: node tools/test-browser.mjs V15.fwsc V16.fwsc [app-loader.fwsc] [known-incompatible.fwsc] [reviewed-compatible.fwsc] [template-0.3.fwsc]
 // Needs playwright-core (or PLAYWRIGHT_MODULE pointing to its index.mjs) and Chrome.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { inspect, rebuild, wipePasses } from "../src/fm1pkg.js";
 import { packageFlash, FLASH_SIZE } from "../src/flash.js";
+import { BRIDGE_URL, BRIDGE_PRODUCT } from "../src/bridge.js";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright-core");
-const [oldPath, nextPath, appPath, incompatibleBootPath, compatibleBootPath] = process.argv.slice(2);
+const [oldPath, nextPath, appPath, incompatibleBootPath, compatibleBootPath, bridgePath] = process.argv.slice(2);
 if (!oldPath || !nextPath) throw new Error("Pass V15.fwsc and V16.fwsc fixture paths.");
 const old = await inspect(readFileSync(oldPath));
 assert.equal(old.product, "FM-1_015");
@@ -409,11 +410,11 @@ try {
       window.bootAttempts = 0; window.calls = []; window.mode = 'wrong-identity'; window.reportedID = 'FM-1_3860070';
       Updater.prototype.scan = async () => [{name:'FM-1',id:{text:window.reportedID,model:window.reportedID.startsWith('ota-')?'ota-FM-1':'FM-1',version:3860070}}];
       Updater.prototype.installBoot = async () => { window.bootAttempts++; throw Error('Unexpected boot install'); };
-      Updater.prototype.install = async (image, product, step) => {
+      Updater.prototype.install = async function(image, product, step) {
         window.calls.push({size:image.length,product});
         if (window.mode === 'wrong-identity') return 'FM-1_999';
         if (product !== 'FM-1_015') throw Object.assign(new Error('Simulated second-pass refusal'), {code:'stopped',step:1,served:4,from:{text:'FM-1_015',model:'FM-1',version:15}});
-        window.reportedID = product; step('done',product); return product;
+        window.reportedID = product; this.last={text:product}; this.lastPort='FM-1'; step('done',product); return product;
       };
       Updater.prototype.resume = async (image, step, product) => {
         window.calls.push({resume:true,size:image.length,product}); window.reportedID=product; step('done',product); return true;
@@ -456,6 +457,50 @@ try {
     assert.equal(await page.evaluate(() => window.bootAttempts), 0);
     assert.equal(await page.locator('#file').isDisabled(), false);
   }
+  if (bridgePath) {
+    await page.locator('#file').setInputFiles(oldPath);
+    await page.waitForFunction(() => document.querySelector('#f-id').textContent === 'FM-1_015');
+    await page.evaluate(async () => {
+      const url=new URL('src/updater.js',location.href);url.search=new URL(document.querySelector('script[type="module"]').src).search;
+      const {Updater}=await import(url.href);
+      window.reportedID='FM-1_700';window.bridgeCalls=[];window.bootAttempts=0;window.bridgeMode='wrong-identity';
+      Updater.prototype.scan=async()=>[{name:'FM-1',id:{text:window.reportedID,model:'FM-1',version:700}}];
+      Updater.prototype.install=async function(image,product,step){
+        window.bridgeCalls.push({size:image.length,product});
+        if(window.bridgeMode==='wrong-identity')return 'FM-1_999';
+        window.reportedID=product;this.last={text:product};this.lastPort='FM-1';step('done',product);return product;
+      };
+      Updater.prototype.installBoot=async()=>{window.bootAttempts++;throw Error('Unexpected boot install');};
+    });
+    await page.locator('#rescan').click();
+    await page.locator('#bridge-row').waitFor({state:'visible'});
+    assert.equal(await page.locator('#bridge-go').isDisabled(),true,'backup gate also covers the helper route');
+    await page.locator('#backup').check();
+    await page.locator('#bootl').check();
+    let badBridge=true;
+    await page.route(BRIDGE_URL,route=>route.fulfill({status:200,contentType:'application/octet-stream',body:readFileSync(badBridge?oldPath:bridgePath)}));
+    await page.locator('#bridge-go').click();
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('does not match the reviewed file'));
+    assert.deepEqual(await page.evaluate(()=>window.bridgeCalls),[],'hash mismatch stops before either hardware operation');
+    badBridge=false;
+    await page.locator('#bridge-go').click();
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('FM-1_999'));
+    assert.equal((await page.evaluate(()=>window.bridgeCalls)).length,1,'wrong helper identity prevents final install');
+    assert.equal(await page.locator('#f-id').textContent(),'FM-1_015','original choice stays loaded');
+    assert.equal(await page.locator('#file').isDisabled(),true);
+    await page.locator('#rescan').click();
+    await page.locator('#device-list input').waitFor();
+    await page.locator('#device-list input').check();
+    assert.match(await page.locator('#flash-caveat').textContent(),/generic fm1-base template/);
+    assert.doesNotMatch(await page.locator('#flash-ranges').textContent(),/0xBA000/,'helper route does not enable the wipe');
+    await page.evaluate(()=>{window.bridgeMode='success';window.bridgeCalls=[];});
+    await page.locator('#go').click();
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('temporary updater completed'));
+    assert.deepEqual((await page.evaluate(()=>window.bridgeCalls)).map(c=>c.product),[BRIDGE_PRODUCT,'FM-1_015']);
+    assert.equal(await page.evaluate(()=>window.bootAttempts),0,'bridge route skips boot even if previously selected');
+    await page.locator('#route-events').screenshot({path:'/tmp/fm-static-helper-complete-mobile.png'});
+    await page.unroute(BRIDGE_URL);
+  }
   // Isolated tab controller: test the install navigation lock without flashing.
   const navigation = await browser.newPage();
   await navigation.goto(process.env.FLASH_TEST_URL || 'http://127.0.0.1:8873');
@@ -470,5 +515,5 @@ try {
   assert.equal(await navigation.locator('#tab-recovery').getAttribute('aria-selected'), 'true');
   await navigation.close();
   assert.deepEqual(errors, []);
-  console.log("Browser checks passed: shared firmware, layout analysis, sequential gates, MIDI refresh races and errors, recovery help, mobile themes" + (incompatibleBootPath ? ", boot compatibility, two-pass identity gate and exact resume" : "") + ". No device writes.");
+  console.log("Browser checks passed: shared firmware, layout analysis, sequential gates, MIDI refresh races and errors, recovery help, mobile themes" + (incompatibleBootPath ? ", boot compatibility, two-pass identity gate and exact resume" : "") + (bridgePath ? ", pinned generic updater route" : "") + ". No device writes.");
 } finally { await browser.close(); }

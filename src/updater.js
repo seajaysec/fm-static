@@ -76,7 +76,7 @@ export class Updater extends Base {
     this.target = null;                     // the port picked for the first contact (several FM-1s may be connected)
     this.baseline = null;                   // the ports before an update started (see watch())
     this.startup = null;                    // { at, bytes }: the answer to step 1's startup-code comparison
-    this.step1 = null; this.step1From = null; this.last = null;
+    this.step1 = null; this.step1From = null; this.last = null; this.lastPort = null;
   }
 
   inputNames() {
@@ -89,6 +89,14 @@ export class Updater extends Base {
     return this.patterns.some((p) => n.includes(p.toLowerCase())) || this.allowed.has(name);
   }
   select(name) { this.target = name; if (name) this.allow(name); }
+
+  // A reboot may change the port name. Start the next pass only on the port
+  // that actually returned the expected identity, not any other known FM-1.
+  pinVerified(product) {
+    if (!this.lastPort || this.last?.text !== product) throw fail("notfound", "The verified firmware port is no longer known. Refresh devices before continuing.");
+    this.select(this.lastPort);
+    this.baseline = null;
+  }
 
   // every MIDI port that has both an input and an output of the same name
   ports() {
@@ -126,7 +134,7 @@ export class Updater extends Base {
     self.access = this.view(accept);
     const dev = await Base.prototype.find.call(self, filter) || await this.findOpenLoader(accept, filter);
     if (dev && dev.name.startsWith(PREFIX)) dev.name = dev.name.slice(PREFIX.length);
-    if (dev) this.last = tagOpen(dev.id);
+    if (dev) { this.last = tagOpen(dev.id); this.lastPort = dev.name; }
     return dev;
   }
 

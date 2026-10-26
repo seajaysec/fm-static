@@ -121,6 +121,17 @@
       <div id="boot-msg" hidden></div>
       <ol id="route-dev" class="route"></ol>
       <ol id="route-opts" class="route">
+        <li id="bridge-row" class="cp" data-state="option" hidden>
+          <span class="plate"><span>OPTION</span></span>
+          <div>
+            <b>Install through a temporary updater</b>
+            <p>Some community updaters reject official firmware when startup code has changed—for example after installing m-bootloader. We can read the running firmware’s identity, but cannot tell from it which bootloader is installed. Try a normal install first; use this route if needed.</p>
+            <p>Pass 1 installs the generic <a href="https://charlesvestal.github.io/fm1-base/" target="_blank" rel="noopener">fm1-base template 0.3</a>, preserving startup code. Once it answers, pass 2 installs your selected firmware. Your selection stays loaded. No extended wipe or m-bootloader installation is added.</p>
+            <p class="warn">This replaces the running application temporarily and can affect saved data. Official firmware then replaces the bootloader. Source checked and host tested; this complete route is not yet device tested here. Keep this page open through both passes; reloading loses its recovery state.</p>
+            <p><button id="bridge-go" type="button" disabled>Install through temporary updater</button></p>
+            <p class="small">Requires the backup acknowledgement below and only one responding FM-1. Disconnect other FM-1s first. The temporary file is fetched from a pinned upstream revision and checked by SHA-256 before either pass begins.</p>
+          </div>
+        </li>
         <li id="wipe-row" class="cp" data-state="option" hidden>
           <span class="plate"><span>OPTION</span></span>
           <div>
@@ -137,6 +148,7 @@
           <div>
             <b>Also install m-bootloader</b>
             <p id="boot-compatibility" class="warn"></p>
+            <p class="warn">Returning to official firmware later can be refused by an older community updater because m-bootloader changes startup code. Install through this page’s temporary updater, or use M-Flasher, if that happens. A normal official update replaces m-bootloader.</p>
             <p><label><input id="bootl" type="checkbox" disabled> Install m-bootloader after the firmware</label></p>
             <p class="small">An open bootloader by Julius Vitkauskas (MIT). It replaces M-VAVE's bootloader and stays through
               application-only updates. Hold PLAY while switching on for a recovery menu, or REC for USB download mode used by desktop recovery tools, even when a firmware won't start.
@@ -158,8 +170,8 @@
         </li>
       </ol>
       <p id="install-row" class="next" hidden><button id="go">Install</button> <span id="why" class="small"></span></p>
-      <p id="wipe-device" class="warn" hidden>After a fresh device check, select the same FM-1 used for this wipe. Disconnect other FM-1s before continuing. The protocol cannot identify a unit by serial number.</p>
-      <p id="wipe-cancel-row" class="small" hidden><button id="wipe-cancel" type="button" class="small">Cancel remaining wipe passes</button> Completed passes stay installed. Cancellation is available once normal firmware answers.</p>
+      <p id="wipe-device" class="warn" hidden>After a fresh device check, select the same FM-1 used for this sequence. Disconnect other FM-1s before continuing. The protocol cannot identify a unit by serial number.</p>
+      <p id="wipe-cancel-row" class="small" hidden><button id="wipe-cancel" type="button" class="small">Cancel remaining passes</button> Completed passes stay installed. Cancellation is available once normal firmware answers.</p>
 
       <div id="after" hidden>
         <ol id="route-events" class="route"></ol>
@@ -169,7 +181,7 @@
             <div>
           <h3>Restore official startup code</h3>
           <p class="warn">If you installed m-bootloader separately, a normal firmware file usually cannot supply the startup bytes now on your device. Try the compatible-updater route below before this workaround.</p>
-          <p><b>Return to stock through a compatible updater:</b> back up your data, install a release whose updater accepts replacement startup code, then select official V15 and install normally, with the wipe off. <a href="https://github.com/charlesvestal/fm1-loom/releases/tag/v0.9" target="_blank" rel="noopener">LOOM 0.9</a> has a source-checked, host-tested updater for this; this sequence has not been tested on a device here. Installing V15 normally replaces m-bootloader with M-VAVE’s bootloader. <a href="#desktop-recovery">M-Flasher is the desktop alternative</a>.</p>
+          <p><b>Return to stock through a compatible updater:</b> use <a href="#bridge-row">Install through a temporary updater</a> above. It installs the generic fm1-base template first, then your selected official firmware. The complete route has not been tested on a device here. Installing V15 normally replaces m-bootloader with M-VAVE’s bootloader. <a href="#desktop-recovery">M-Flasher is the desktop alternative</a>.</p>
           <p>The firmware on your FM-1 refused this package at the startup-code check. This mode answers that check with the
             startup code your FM-1 already has, taken from a Felucca-family file you pick, so the check passes. Then M-VAVE's
             loader writes the package, its own startup code included.</p>
@@ -241,6 +253,7 @@
         <div class="wf-node"><span class="wf-number" aria-hidden="true">4</span><h3>Install and check</h3><p>The device checks the package, writes it and restarts. The page checks the returned identity.</p></div>
         <div class="wf-branches">
           <div class="wf-detour"><h4>Package refused?</h4><p>Read the refusing checkpoint. Use a compatible package or return to stock first.</p></div>
+          <div class="wf-detour wf-untried"><h4>Official firmware refused?</h4><p>Install through the generic temporary updater, then your selected firmware. Both identities are checked.</p></div>
           <div class="wf-detour wf-untried"><h4>Startup-code refusal?</h4><p>The opt-in restore step offers another route. Read its risks before proceeding.</p></div>
           <div class="wf-detour wf-untried"><h4>Write interrupted?</h4><p>If the update loader still answers, reconnect and use Finish update.</p></div>
           <div class="wf-detour wf-untried"><h4>Extended wipe?</h4><p>Application-loader packages take two passes through V15. Both passes must finish. Not yet device tested.</p></div>

@@ -77,6 +77,21 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   [updater](https://github.com/hugelton/felucca-bsp/blob/305c372c3ec18f3917744e608998a0d7fd700135/chip/ota.c)
   accepts packages without `flash.bin`; host simulation accepts the bundled installer. This exact pairing has not been
   device tested. Releases requiring both `flash.bin` and `ota.bin` reject the standalone installer at the header check.
+- **Install through a temporary updater**: when selecting an official-loader FM-1 package while community firmware
+  answers, an optional two-pass route installs the generic fm1-base template 0.3 first, verifies its identity, then
+  installs the original selection. It does not add the extended wipe or m-bootloader. Normal installation remains the
+  default. The warning is based on firmware identity; this page cannot determine the installed bootloader from that reply.
+  This helps with older updaters that compare the incoming startup code byte for byte with the device's current code.
+  The [upstream template file](https://github.com/charlesvestal/fm1-base/blob/cb2baf68226d3eca38b3c1909423e029f0474626/firmware/template-0.3.fwsc)
+  is fetched at that immutable revision and must match SHA-256
+  `a62e6d803b0fa223839d4af1eb558a4d02cc27b1f5c492e93b4a49beedc00538` and identity `FM-1_11000300`.
+  Upstream identifies its source as [934e40d](https://github.com/charlesvestal/fm1-base/tree/934e40d846d84e76e9c428d37b74bccb6192c823),
+  with BSP [2cd696a](https://github.com/hugelton/felucca-bsp/tree/2cd696a2b94341077303e9132bb4be3d0a87ebcf).
+  That updater accepts official V15 and the standalone boot installer in host simulation; the exact template is also
+  in the boot-option allowlist. The template install and complete return-to-stock sequence have not been tested on a
+  device here. Temporary firmware may change saved data; back up first. Official updates replace m-bootloader.
+  Both two-pass routes retain their current package for retry, require only one responding FM-1, and pin the next pass
+  to the port that returned the verified identity. After failure, fresh discovery and explicit device selection are required.
 - Can read a GitHub repository address: it lists the `.fwsc` files committed in the repo (loadable) and attached to
   releases (download-only: GitHub does not let a web page read those). For files GitHub holds a build attestation for, it
   shows which workflow built them from which commit; it reports what GitHub says and does not verify the signature.
@@ -129,6 +144,8 @@ flowchart TD
   J -- no --> J1[Stop: a package for another model is the only thing refused]
   J -- yes --> K[Back up first. Unknown-origin file: confirm a source you trust. Optional: area wipe up to 0xBA000]
   K --> M[Install: the FM-1's own firmware looks at the package first]
+  K -- official package with community firmware, if chosen --> B1[Generic template updater first. Verify its identity, then install the original selection normally]
+  B1 --> O
   K -- application-loader extended wipe --> P[Pass 1: V15 application only, startup code kept. Verify V15 before continuing. Skip if V15 already runs]
   P --> P2[Pass 2: official loader installs chosen firmware and wipes to 0xBA000. No m-bootloader afterwards]
   P2 --> O
@@ -147,7 +164,7 @@ flowchart TD
   V -. command-line alternative .-> Z[MvaveFM1Unbricker: Windows or Linux]
   T -- Bricked FM-1 --> Y[FM-1 Transporter: extra hardware required]
   classDef notrun stroke-dasharray: 6 4
-  class H,J1,S,R,P,P2 notrun
+  class H,J1,S,R,P,P2,B1 notrun
 ```
 
 The About tab uses a responsive feature table comparing M-VAVE Open Workbench, community installers, FM-Static,
@@ -180,7 +197,7 @@ round it; installing m-bootloader after a firmware and then putting M-VAVE's V16
 GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
 update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page.
 
-Those wipe runs cover the earlier single-pass route. Not tested on a device: the two-pass V15 route, finishing an interrupted update,
+Those wipe runs cover the earlier single-pass route. Not tested on a device: the two-pass V15 wipe and generic-template routes, finishing an interrupted update,
 the startup-code refusal and its restore step, boot-mode detection, the wrong-model refusal, m-bootloader's recovery menu and download-mode keys. Out of scope:
 how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 
@@ -209,7 +226,9 @@ from About or Layout Analysis, and narrow the window: the table and workflows sh
 Optional third and fourth fixture paths exercise an application-loader package and the known-incompatible
 `FM-1_3860070` package respectively. An optional fifth fixture is the reviewed LOOM 0.9 release. These check boot-option
 visibility, V15 template validation, the two-pass identity gate and phase-specific resume, replacing installation methods
-with simulations so no write command is sent.
+with simulations so no write command is sent. A sixth fixture is the pinned fm1-base template 0.3; it checks the
+generic route's hash guard, first-pass identity gate, unchanged target and exclusion of wipe/boot options.
+`node tools/test-updater.mjs` checks next-pass port binding with two simulated devices. `node tools/test-wipe.mjs /path/to/V15.fwsc /path/to/application-loader.fwsc` checks the generated packages' writers and payloads.
 
 ## Lineage and licence
 

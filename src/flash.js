@@ -101,7 +101,7 @@ export function packageFlash(pkg) {
   return pkg.image.subarray(pkg.flashOff, pkg.flashOff + pkg.flashLen);
 }
 
-export function writePlan(pkg, { wipe = false, boot = false, stock = null } = {}) {
+export function writePlan(pkg, { wipe = false, boot = false, bridge = false, stock = null } = {}) {
   const ranges = [];
   const valid = pkg.model === "FM-1" && pkg.flashLen >= BOOT_END && pkg.flashLen <= FLASH_SIZE && pkg.flashLen % 0x1000 === 0;
   if (!valid) return { known: false, ranges, reason: "Write ranges are unknown for this model or image size." };
@@ -115,7 +115,7 @@ export function writePlan(pkg, { wipe = false, boot = false, stock = null } = {}
     ranges.push({ start: BOOT_END, end: APP_END, source: "package", label: "Application area" });
   } else return { known: false, ranges, reason: "This loader's write range is unknown. The package extent alone cannot establish what it writes." };
   if (boot) ranges.push({ start: 0, end: BOOT_END, source: "unavailable", label: "Bootloader installed afterwards" });
-  return { known: true, ranges, reason: (wipe && pkg.loader === "app" ? "Final wipe pass shown. The first pass temporarily installs V15's application at 0x4000–0x93000, preserving startup code, and must verify V15 before proceeding. " : "") + "Expected firmware writes, based on the recognised loader design. Loader markers are not signatures. Staging, update-record cleanup and running firmware may write elsewhere; this is not a complete erase map or a readback guarantee." };
+  return { known: true, ranges, reason: (bridge ? "Final installation pass shown. First, the generic fm1-base template is installed at 0x4000–0x93000, preserving startup code; its identity must be verified before this pass. " : wipe && pkg.loader === "app" ? "Final wipe pass shown. The first pass temporarily installs V15's application at 0x4000–0x93000, preserving startup code, and must verify V15 before proceeding. " : "") + "Expected firmware writes, based on the recognised loader design. Loader markers are not signatures. Staging, update-record cleanup and running firmware may write elsewhere; this is not a complete erase map or a readback guarantee." };
 }
 
 export function regionEffect(region, plan) {

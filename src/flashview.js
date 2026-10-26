@@ -75,7 +75,7 @@ export function setupFlashView() {
 
   function render() {
     const { pkg = null, ...options } = current || {};
-    const key = [pkg, options.wipe, options.boot, options.stock, backup];
+    const key = [pkg, options.wipe, options.boot, options.bridge, options.stock, backup];
     if (previous && key.every((v, i) => v === previous[i])) return;
     previous = key;
     $("analysis-source").textContent = pkg
