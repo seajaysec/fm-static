@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.12">
+<link rel="stylesheet" href="style.css?v=2026-10-26.13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -27,7 +27,7 @@
     <p class="small">It is made for the M-VAVE FM-1. The SMK-37 may work; that is completely untested. It checks that the FM-1 comes back running what you installed, not how it sounds.</p>
     <details class="small v15note"><summary>Do I need official V15 first?</summary>
       <p>No. Some installers and firmwares caution against installing anything else until you have gone through M-VAVE's official V15. We haven't found a strong reason for that: this page installs any valid package over whatever firmware answers it. The two refusals seen so far (a package bigger than V15's, and a startup-code mismatch) can be got around by installing through a firmware that accepts the package (M-VAVE's V16, or any firmware on a recent fm1-base), or by the restore step, which has not been tried on an FM-1 yet.</p>
-      <p>If you would like to go through V15 anyway, here it is: the original V15 is inside M-VAVE's Workbench download. Paste <code>https://open.m-vave.com/fm1-workbench</code> in the Firmware file address box, save the file it points to, then choose it in Firmware file: the page finds V15 inside it.</p>
+      <p>If you want V15: <a href="https://web.archive.org/web/20260906194826id_/https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc" target="_blank" rel="noopener">Download official V15 (.fwsc, archived copy)</a>. Then choose the downloaded file in Firmware file. This is the original M-VAVE package; the manufacturer’s current download URL now serves V16.</p>
     </details>
   </section>
 
@@ -51,6 +51,7 @@
     <p id="url-msg" class="small" role="status" hidden></p>
     <ul id="url-results" class="plain"></ul>
     </fieldset>
+    <p class="small after">Need stock firmware? <a href="https://web.archive.org/web/20260906194826id_/https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc" target="_blank" rel="noopener">Download official V15 (.fwsc, archived copy)</a>.</p>
     <p id="file-msg" class="small" role="status">No firmware selected.</p>
 
   </section>
@@ -483,14 +484,15 @@
     <p>You already chose <b id="sdlg-main"></b>. That is the firmware that ends up on your FM-1.</p>
     <p>The application/data wipe is written by M-VAVE's update loader, which comes with the official V15 package: the page builds the
       package it writes from the V15 loader and startup code plus your firmware. Only those parts of the V15 file are used.</p>
+    <p><a href="https://web.archive.org/web/20260906194826id_/https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc" target="_blank" rel="noopener">Download official V15 (.fwsc, archived copy)</a>. Then choose the downloaded file below.</p>
     <p><input id="stockfile" type="file" accept=".fwsc" aria-label="Official V15 package"></p>
     <p id="sdlg-msg" class="small" hidden></p>
     <p><button id="sdlg-close" class="small" type="button">Close</button></p>
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.12</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.13</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.12"></script>
+<script type="module" src="src/app.js?v=2026-10-26.13"></script>
 </body>
 </html>
