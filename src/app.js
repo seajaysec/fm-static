@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.1";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.1";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.1";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.7";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.7";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.7";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.7";
+import { setupTabs } from "./tabs.js?v=2026-10-26.7";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.1";
+const VERSION = "2026-10-26.7";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
+const updateFlashView = setupFlashView();
+const updateTabs = setupTabs();
 
 const state = {
   pkg: null, access: null, up: null, devices: [], selected: null, busy: false, scanning: false, done: false,
@@ -79,7 +83,7 @@ function fileChecks(pkg) {
   const out = [];
   const add = (st, plate, title, text) => out.push({ state: st, plate, title, text });
   if (pkg) {
-    add("go", "CLEAR", "Package intact", `${pkg.product}. The header and flash.bin checksums match.`);
+    add("go", "CLEAR", "Package checksums match", `${pkg.product}. The header and flash.bin checksums match.`);
     add("info", "SEEN", "What the file is", shapeText(pkg));
     if (pkg.provenance) add("go", "BUILT", "Built by GitHub Actions", `${builtText(pkg.provenance)}${pkg.provenance.workflow ? ", workflow " + pkg.provenance.workflow : ""}. GitHub reports this record for this file's hash; it shows where the file came from, not that the code is safe.`);
     else if (pkg.provenance === null) add("info", "SEEN", "No GitHub build record", `GitHub holds no build attestation for this exact file in ${pkg.provenanceRepo}, so nothing here says where it was built.`);
@@ -164,7 +168,7 @@ function stepOneRefusal(e, pkg) {
 
 async function loadFile(file, source = "") {
   state.pkg = null; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; $("after").hidden = true;
-  $("wipe").checked = false;   // a full wipe is chosen for one install, never carried over to the next file
+  $("wipe").checked = false;   // a wipe is chosen for one install, never carried over to the next file
   $("bootl").checked = false; $("backup").checked = false;
   $("fileinfo").hidden = true;
   if (file) {
@@ -556,13 +560,13 @@ $("boot-check").addEventListener("click", async () => {
   box.replaceChildren();
   let dev = null;
   try { dev = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x4C4A }] }); } catch (e) { log(`usb: ${e.name}`); }
-  const link = (href, text) => make("a", { href, textContent: text, rel: "noopener" });
+  const link = (href, text) => make("a", { href, textContent: text, rel: "noopener", target: href.startsWith("#") ? "_self" : "_blank" });
   if (!dev) box.append(make("p", { className: "small", textContent: "No boot-mode device was found or chosen. Replug the FM-1 with a USB data cable straight into the computer and try again." }));
   else box.append(
-    make("p", { className: "err", textContent: `Your FM-1 is in the chip's boot mode (${dev.productName || "WL80UBOOT"}, ${dev.vendorId.toString(16)}:${dev.productId.toString(16)}). Its firmware does not start, so it has no MIDI port for this page to find.` }),
-    make("p", {}, "Sorry: this page can't write to it from there, and it should be easier than this. The open tool ", link("https://github.com/kagaimiq/jl-uboot-tool", "jl-uboot-tool"),
-      " talks to that mode, but it ships no loader for this chip family (its README lists WL82/AC791N as unknown), so expect some work. ",
-      link("https://github.com/kurogedelic/FM-1-transporter", "FM-1 Transporter"), " is the recovery Felucca-family projects document. Neither is tested here.")
+    make("p", { className: "warn", textContent: `Selected JieLi USB device: ${dev.productName || "unknown name"}, ${dev.vendorId.toString(16)}:${dev.productId.toString(16)}. ${dev.productId === 0x8057 ? "This ID is used by the FM-1's ROM download mode; it is not a MIDI update port." : "This product ID is not the expected FM-1 ROM download ID (8057)."} USB identification alone does not prove which model is attached or why it entered this mode.` }),
+    make("p", {}, "This page cannot flash through ROM download mode. For an FM-1 in that mode, use ",
+      link("https://github.com/jvitkauskas/m-flasher", "M-Flasher"), " for a full backup and recovery. ",
+      link("#desktop-recovery", "See the recovery routes and alternatives"), ".")
   );
   box.hidden = false;
 });
@@ -608,8 +612,8 @@ $("donor").addEventListener("change", async () => {
 });
 $("risk").addEventListener("change", refresh);
 
-// ------------------------------------------------------------- full wipe ---
-// The package this page writes for a full wipe: the official loader, V15's startup code, the chosen firmware's app area
+// ------------------------------------------------------------- area wipe ---
+// The package this page writes for an area wipe: the official loader, V15's startup code, the chosen firmware's app area
 // and erased flash (0xFF) up to WIPE_END. The format is the one of Baudgirl's releases (V15 with another flash.bin), which
 // rebuild() reproduces byte for byte.
 async function wipePackage(pkg) {
@@ -636,6 +640,7 @@ $("bootl").addEventListener("change", refresh);
 $("backup").addEventListener("change", refresh);
 
 function refresh() {
+  updateTabs(state.busy);
   const dev = selectedDevice(), pkg = state.pkg;
   const resume = dev && IS_OTA(dev.id);
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
@@ -654,7 +659,7 @@ function refresh() {
   $("boot-row").hidden = !(canOpts && pkg.loader === "app");   // M-VAVE's own firmware has no installer for it
   if (canWipe) {
     $("wipe-info").textContent = state.stock
-      ? `Erases every sector from the start of the app area to ${hex(WIPE_END)} and writes ${pkg.product} there, the way a Baudgirl package covers its range. Saved projects and settings that any firmware keeps in that range are lost. M-VAVE's loader also rewrites the FM-1's startup code with V15's. Using ${state.stock.name || "the official V15 package"}.`
+      ? `Writes ${pkg.product} and erases the remaining space below ${hex(WIPE_END)}. Saved data in that range is lost. This is not a complete settings or Bluetooth reset: V16's settings and stock V15/V16 Bluetooth pairings are beyond it. The template's startup code is also written. Using ${state.stock.name || "the template package"}.`
       : "Needs the official V15 package: M-VAVE's loader and the startup code it writes come from it.";
     $("wipe-pick").hidden = !!state.stock;
   }
@@ -676,6 +681,7 @@ function refresh() {
 
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
+  updateFlashView({ pkg, wipe: !resume && wipeOn(), boot: !resume && bootOn() && pkg?.loader === "app", stock: state.stock });
   renderRoute();
 }
 
@@ -711,7 +717,7 @@ async function install(startup = null) {
   let reads = 0, wrote = false;
   const step = (k, a) => {
     log(`${k} ${a ?? ""}`);
-    if (k === "start") note("info", "STARTED", "Update started", `Asked ${a} to start an update.` + (sent !== pkg ? ` Full wipe: the package written covers flash up to ${hex(WIPE_END)}.` : ""));
+    if (k === "start") note("info", "STARTED", "Update started", `Asked ${a} to start an update.` + (sent !== pkg ? ` Application/data wipe: the package written covers flash up to ${hex(WIPE_END)}.` : ""));
     if (k === "verify") reads = a;
     if (k === "loader") note("go", "ACCEPTED", "Step 1: accepted", `${dev.id.text} read ${reads} parts of the package, found nothing to refuse, and restarted into the update loader.`);
     if (k === "write" && !wrote) { wrote = true; note("info", "WRITING", "Update loader running", "Writing the package to the FM-1. Do not unplug it."); }

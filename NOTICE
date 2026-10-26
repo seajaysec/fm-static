@@ -18,6 +18,15 @@ Copyright (C) 2026 Charles Vestal and Leo Kuroshita. vendor/fm1-base/SOURCE name
 m-bootloader 1.2's installer package, by Julius Vitkauskas, is MIT
 (vendor/fm1-base/m-bootloader/, with its licence).
 
+Flash inspection
+----------------
+src/flash.js adapts flash-table decoding and region names from src/formats.rs
+and src/sectormap.rs in
+https://github.com/jvitkauskas/m-flasher at commit
+67858a6530861a8bad64a29e38c4e33392e4f6e5, Copyright (c) 2026 Julius Vitkauskas,
+MIT. Its licence is retained in vendor/flash-formats/LICENSE. No native USB
+transport or flash-loader binary from that project is included.
+
 No firmware is included. A .fwsc file chosen on the page is read in the browser and sent only to
 the FM-1 over USB.
 
