@@ -1,0 +1,16 @@
+FM-1 factory voice banks recovered by KingParamount
+https://github.com/KingParamount/fm1-factory-presets
+Revision: 04b34cabd69745cf3a549af588619108e2866c0d
+Copied unchanged from banks/FM-1_factory_bank1.syx through bank4.syx.
+See LICENCE.md for the contributor's CC0 grant and the voice-data provenance limitation.
+
+SHA-256:
+6a46c1eed389a775a1747f4488261c848e9ad43fdec6250ce2c8e004020428f9  FM-1_factory_bank1.syx
+0f076624f75451ff5f1bbe92e44a8643c74ea9c56ccaaf190bf730d8ab730264  FM-1_factory_bank2.syx
+5eab4699b4c50c82986d17726ea9997230efc1c5a7745ed7d251d31313e8b99d  FM-1_factory_bank3.syx
+8142fb69249ad1d78a4665ebb2eb33f4e1b9689d2dfabce97077cc9da5d30308  FM-1_factory_bank4.syx
+
+This recovered set differs from the verified V15 package's embedded banks in
+ten parameter bytes across BASS 1 and GUITAR 4. It is provided as this recovered
+set, without modifying those voices or claiming byte identity with V15's banks.
+No tool code or documentation prose from the upstream project is included.

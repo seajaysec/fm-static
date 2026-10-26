@@ -74,23 +74,23 @@ test("known loaders have distinct write limits and unknown loaders do not guess"
   assert.deepEqual(writePlan(pkg("app")).ranges.map((r) => [r.start, r.end]), [[0x4000, 0x93000]]);
   for (const p of [pkg("unknown"), pkg("app", 0x92000), pkg("official", 0xa9001), { ...pkg(), model: "SMK-37" }]) assert.equal(writePlan(p).known, false);
 });
-test("area wipe cannot be mistaken for V16 settings or stock Bluetooth reset", () => {
+test("cleanup includes voice-region overlaps without claiming a whole settings reset", () => {
   const plan = writePlan(pkg(), { wipe: true });
   const next = inspectFlash(fixture(true)), old = inspectFlash(fixture());
-  for (const name of ["VM", "BTIF", "SEQ64"]) assert.equal(regionEffect(next.regions.find((e) => e.name === name), plan), "Outside firmware write");
-  assert.equal(regionEffect(old.regions.find((e) => e.name === "VM"), plan), "Partly within firmware write");
-  assert.equal(regionEffect(old.regions.find((e) => e.name === "BTIF"), plan), "Outside firmware write");
+  for (const [name, effect] of [["VM", "Outside"], ["BTIF", "Within"], ["SEQ64", "Partly within"]]) assert.equal(regionEffect(next.regions.find((e) => e.name === name), plan), `${effect} planned writes`);
+  assert.equal(regionEffect(old.regions.find((e) => e.name === "VM"), plan), "Partly within planned writes");
+  assert.equal(regionEffect(old.regions.find((e) => e.name === "BTIF"), plan), "Outside planned writes");
 });
 test("comparison counts only available final bytes, excludes untouched data, and honours later boot install", () => {
   const p = pkg(), backup = { bytes: new Uint8Array(FLASH_SIZE).fill(42) };
   backup.bytes[0x5000] = 0; backup.bytes[0xed000] = 0;
   assert.deepEqual(byteCounts(backup, p, writePlan(p)), { compared: 0xa9000, different: 1, unavailable: 0 });
   const plan = writePlan(p, { wipe: true });
-  assert.deepEqual(byteCounts(backup, p, plan), { compared: 0xba000 - 0x4000, different: 1 + 0x11000, unavailable: 0x4000 });
+  assert.deepEqual(byteCounts(backup, p, plan), { compared: 0xba000 - 0x4000, different: 1 + 0x11000, unavailable: 0x8000 });
   const boot = writePlan(p, { boot: true });
   assert.deepEqual(byteCounts(backup, p, boot), { compared: 0xa9000 - 0x4000, different: 1, unavailable: 0x4000 });
   assert.equal(compareBytes(backup, p, writePlan(pkg("unknown"))), null);
-  assert.deepEqual(byteCounts(backup, p, writePlan(p, { wipe: true, stock: p }), p), { compared: 0xba000, different: 1 + 0x11000, unavailable: 0 });
+  assert.deepEqual(byteCounts(backup, p, writePlan(p, { wipe: true, stock: p }), p), { compared: 0xba000, different: 1 + 0x11000, unavailable: 0x4000 });
 });
 test("sector diagnostics count whole comparable sectors and distinguish erased bytes from corruption", () => {
   const p = pkg(), backup = { bytes: new Uint8Array(FLASH_SIZE).fill(42) };

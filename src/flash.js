@@ -4,7 +4,7 @@
 // Flash table decoding and region names adapted from MIT-licensed formats.rs
 // and sectormap.rs; see NOTICE.
 // Inspection only: this module never communicates with a device or builds an update.
-import { crc16, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.16";
+import { crc16, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.17";
 
 export const FLASH_SIZE = 0x100000;
 export const BOOT_END = 0x4000;
@@ -109,22 +109,23 @@ export function writePlan(pkg, { wipe = false, boot = false, bridge = false, sto
     ranges.push({ start: 0, end: BOOT_END, source: stock ? "stock" : "unavailable", label: "Template startup code" });
     ranges.push({ start: BOOT_END, end: pkg.flashLen, source: "package", label: "Selected firmware" });
     if (pkg.flashLen < WIPE_END) ranges.push({ start: pkg.flashLen, end: WIPE_END, source: "erased", label: "Erase to 0xBA000" });
+    ranges.push({ start: 0xea000, end: 0xee000, source: "unavailable", label: "Valid voice data via temporary V15" });
   } else if (pkg.loader === "official") {
     ranges.push({ start: 0, end: pkg.flashLen, source: "package", label: "Firmware and startup code" });
   } else if (pkg.loader === "app" && pkg.flashLen >= APP_END) {
     ranges.push({ start: BOOT_END, end: APP_END, source: "package", label: "Application area" });
   } else return { known: false, ranges, reason: "This loader's write range is unknown. The package extent alone cannot establish what it writes." };
   if (boot) ranges.push({ start: 0, end: BOOT_END, source: "unavailable", label: "Bootloader installed afterwards" });
-  return { known: true, ranges, reason: (bridge ? "Final installation pass shown. First, the generic fm1-base template is installed at 0x4000–0x93000, preserving startup code; its identity must be verified before this pass. " : wipe && pkg.loader === "app" ? "Final wipe pass shown. The first pass temporarily installs V15's application at 0x4000–0x93000, preserving startup code, and must verify V15 before proceeding. " : "") + "Expected firmware writes, based on the recognised loader design. Loader markers are not signatures. Staging, update-record cleanup and running firmware may write elsewhere; this is not a complete erase map or a readback guarantee." };
+  return { known: true, ranges, reason: (bridge ? "Final installation pass shown. First, the generic fm1-base template is installed at 0x4000–0x93000, preserving startup code; its identity must be verified before this pass. " : wipe ? "Cleanup sequence shown: temporarily reach V15, apply valid data at 0xEA000–0xEE000 through its voice storage commands, then install the selected firmware and erase below 0xBA000. The bank payload is not included in this file comparison. V15 is skipped if already running; application-only first passes preserve startup code. " : "") + "Expected writes, based on the recognised loader design. Loader markers are not signatures. Staging, update-record cleanup and running firmware may write elsewhere; this is not a complete erase map or a readback guarantee." };
 }
 
 export function regionEffect(region, plan) {
   if (!plan.known) return "Unknown";
   const overlaps = plan.ranges.filter((r) => r.start < region.end && region.start < r.end);
-  if (!overlaps.length) return "Outside firmware write";
+  if (!overlaps.length) return "Outside planned writes";
   const edges = [...new Set([region.start, region.end, ...overlaps.flatMap((r) => [Math.max(r.start, region.start), Math.min(r.end, region.end)])])].sort((a, b) => a - b);
   const covered = edges.slice(0, -1).reduce((n, a, i) => n + (overlaps.some((r) => r.start <= a && r.end >= edges[i + 1]) ? edges[i + 1] - a : 0), 0);
-  return covered === region.length ? "Within firmware write" : "Partly within firmware write";
+  return covered === region.length ? "Within planned writes" : "Partly within planned writes";
 }
 
 export function compareLayouts(before, after) {

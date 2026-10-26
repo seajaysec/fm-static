@@ -26,5 +26,6 @@ assert.equal(await sha256hex(target.image),original,'preparation does not mutate
 await assert.rejects(wipePasses({...stock,kind:'mvave'},target),/verified official V15/);
 await assert.rejects(wipePasses({...stock,sha256:'0'.repeat(64)},target),/verified official V15/);
 await assert.rejects(wipePasses(stock,{...target,flashLen:APP_END+0x1000}),/standard FM-1/);
-assert.equal((await wipePasses(stock,stock)).length,1);
+assert.equal((await wipePasses(stock,stock)).length,2);
+assert.equal((await wipePasses(stock,stock))[0],stock,'official-loader targets first reach verified V15 too');
 console.log('Wipe package checks passed: exact writers and payloads, erased tail, identities, template and layout guards. No hardware accessed.');

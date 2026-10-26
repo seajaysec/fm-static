@@ -34,3 +34,12 @@ Fonts: Barlow and Barlow Semi Condensed, Copyright 2017 The Barlow Project Autho
 Font License 1.1; the files are in fonts/ with fonts/OFL.txt.
 
 M-VAVE and FM-1 are names of their owners; fm-static is not affiliated with M-VAVE or with Felucca.
+
+Cleanup data
+------------
+vendor/factory-voices/ contains four unmodified bank files from
+https://github.com/KingParamount/fm1-factory-presets at revision
+04b34cabd69745cf3a549af588619108e2866c0d. SOURCE records their hashes.
+The contributor dedicates the capture/decoding/reassembly contribution under CC0;
+their notice does not claim ownership of the underlying voice parameters.
+The complete notice is preserved in vendor/factory-voices/LICENCE.md.

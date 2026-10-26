@@ -289,12 +289,6 @@ try {
   assert.equal(await page.locator("#wipe").isChecked(), false);
   assert.match(await page.locator("#flash-ranges").textContent(), /0x93000/);
   await page.locator('#bridge-row').waitFor({state:'visible'});
-  assert.equal(await page.locator('#v15-voices').isVisible(),true);
-  await page.locator('#v15-voices a').click();
-  assert.equal(await page.locator('#tab-recovery').getAttribute('aria-selected'),'true');
-  assert.equal(await page.evaluate(()=>document.activeElement.id),'factory-voices');
-  assert.equal(await page.locator('#factory-voices').evaluate(e=>e.open),true);
-  await page.locator('#tab-flash').click();
   // Outer package CRCs pass, but an internal application CRC does not.
   const damaged = packageFlash(old).slice(); damaged[0x5000] ^= 1;
   await page.locator("#flash-details").evaluate((e) => e.open = false);
@@ -420,6 +414,13 @@ try {
       const url = new URL('src/updater.js', location.href); url.search = new URL(document.querySelector('script[type="module"]').src).search;
       const {Updater} = await import(url.href);
       window.bootAttempts = 0; window.calls = []; window.mode = 'wrong-identity'; window.reportedID = 'FM-1_3860070';
+      window.bankCommands=0; window.bankFail=false;
+      Updater.prototype.find=async function(filter) {
+        const id={text:window.reportedID,model:'FM-1'};
+        if(!filter(id))return null;
+        const q=[];
+        return {name:this.target,id,link:{lost:false,drain(){q.length=0;},close(){},send(){window.bankCommands++;if(window.bankFail)return false;q.push([240,0,50,1,8,0,0,0,0,127,1,247]);return true;},async read(){return q.shift()||null;}}};
+      };
       Updater.prototype.scan = async () => [{name:'FM-1',id:{text:window.reportedID,model:window.reportedID.startsWith('ota-')?'ota-FM-1':'FM-1',version:3860070}}];
       Updater.prototype.installBoot = async () => { window.bootAttempts++; throw Error('Unexpected boot install'); };
       Updater.prototype.install = async function(image, product, step) {
@@ -448,11 +449,19 @@ try {
     assert.equal(await page.locator('#device-list input:checked').count(),0,'pending wipe never auto-selects a device');
     await page.locator('#device-list input').check();
     assert.equal(await page.locator('#go').isVisible(),true,'pending HTML drop does not lock fileLoading');
-    await page.evaluate(() => {window.mode='second-refusal';window.calls=[];});
+    await page.evaluate(() => {window.mode='second-refusal';window.calls=[];window.bankFail=true;});
+    await page.locator('#go').click();
+    await page.waitForFunction(() => document.querySelector('#route-events').textContent.includes('Voice-region cleanup stopped'));
+    assert.deepEqual(await page.evaluate(() => window.calls), [{size:passes[0].image.length,product:'FM-1_015'}], 'bank failure prevents the final firmware write');
+    await page.locator('#rescan').click();
+    await page.locator('#device-list input').waitFor();
+    await page.locator('#device-list input').check();
+    await page.evaluate(() => {window.bankFail=false;window.bankCommands=0;});
     await page.locator('#go').click();
     await page.waitForFunction(() => document.querySelector('#route-events').textContent.includes('Wipe pass 2 of 2 stopped'));
     assert.deepEqual(await page.evaluate(() => window.calls), [{size:passes[0].image.length,product:'FM-1_015'},{size:859680,product:target.product}]);
-    assert.match(await page.locator('#route-events').innerText(), /Temporary V15 is running; wipe still pending/);
+    assert.match(await page.locator('#route-events').innerText(), /Voice region prepared/);
+    assert.equal(await page.evaluate(()=>window.bankCommands),36,'retry writes all four banks before final install');
     assert.match(await page.locator('#status').innerText(), /Earlier passes remain installed/);
     assert.equal(await page.locator('#restore').isVisible(), false);
     await page.locator('#route-events').screenshot({path:'/tmp/fm-static-two-pass-mobile.png'});
@@ -467,6 +476,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#status').textContent.includes('extended wipe completed'));
     assert.deepEqual((await page.evaluate(() => window.calls)).at(-1), {resume:true,size:859680,product:target.product}, 'resume uses final wipe package, not original or first pass');
     assert.equal(await page.evaluate(() => window.bootAttempts), 0);
+    assert.equal(await page.evaluate(()=>window.bankCommands),36,'resuming the final writer does not rewrite already prepared voice banks');
     assert.equal(await page.locator('#file').isDisabled(), false);
   }
   if (bridgePath) {

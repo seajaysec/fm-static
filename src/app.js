@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.16";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.16";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.16";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.16";
-import { setupTabs } from "./tabs.js?v=2026-10-26.16";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.16";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.17";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.17";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.17";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.17";
+import { setupTabs } from "./tabs.js?v=2026-10-26.17";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.17";
+import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.17";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.16";
+const VERSION = "2026-10-26.17";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -777,7 +778,6 @@ $("backup").addEventListener("change", refresh);
 function refresh() {
   updateTabs(state.busy);
   const dev = selectedDevice(), pkg = state.pkg;
-  $("v15-voices").hidden = pkg?.kind !== "stock";
   const resume = dev && IS_OTA(dev.id);
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
   let why = "";
@@ -788,7 +788,7 @@ function refresh() {
   else if (!dev) why = "Waiting for an FM-1 to be selected above.";
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (unverified(pkg) && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
-  $("go").textContent = state.sequence ? `${resume ? "Finish" : "Retry"} ${state.sequence.kind === "bridge" ? "install" : "wipe"} pass ${state.sequence.at + 1} of ${state.sequence.passes.length}` : resume ? "Finish update" : wipeOn() && pkg?.loader === "app" ? "Start two-pass wipe" : "Install";
+  $("go").textContent = state.sequence ? `${resume ? "Finish" : "Retry"} ${state.sequence.kind === "bridge" ? "install" : "wipe"} pass ${state.sequence.at + 1} of ${state.sequence.passes.length}` : resume ? "Finish update" : wipeOn() ? "Start cleanup and install" : "Install";
   $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock) || (!resume && !$("backup").checked);
   const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400 && (pkg.loader !== "app" || pkg.flashLen === APP_END);
   $("wipe-row").hidden = !canWipe;
@@ -810,11 +810,9 @@ function refresh() {
     ? "This exact firmware release and the bundled m-bootloader installer were tested together on an FM-1 through this page."
     : "This exact firmware release’s updater supports the standalone installer (source checked and host tested). This pairing has not been tested on a device.";
   if (canWipe) {
-    $("wipe-method").textContent = pkg.loader === "app"
-      ? "Two passes: temporarily run V15 using an application-only install that preserves startup code; then use V15 to wipe and install your selected firmware. Pass 2 writes V15 startup code. If V15 already answers, only pass 2 is needed. Host tested, not yet device tested: V15 may fail to boot with custom startup code and require external recovery. Keep this page open; reloading loses the current pass. m-bootloader is skipped."
-      : "One pass using V15’s loader and startup code. The running firmware may refuse a startup-code change. This is not the two-pass route, which needs an application-only loader.";
+    $("wipe-method").textContent = "Temporarily reach V15, apply valid data to its saved-voice region beyond the firmware’s reach, then wipe and install your selected firmware. If V15 already answers, its install is skipped. Keep this page open through the sequence; m-bootloader installation is skipped." + (pkg.loader === "app" ? " The first pass preserves startup code; V15 booting with custom startup code remains unverified and failure can require external recovery." : " The temporary V15 install uses its official writer; the running firmware may refuse a startup-code change.");
     $("wipe-info").textContent = state.stock
-      ? `Writes ${pkg.product} and erases the remaining space below ${hex(WIPE_END)}. Saved data in that range is lost. This is not a complete settings or Bluetooth reset: V16's settings and stock V15/V16 Bluetooth pairings are beyond it. The template's startup code is also written. Using ${state.stock.name || "the template package"}.`
+      ? `Writes ${pkg.product} and erases below ${hex(WIPE_END)}, plus replaces the 16 KiB voice region at 0xEA000–0xEE000 with valid data. Existing data in those ranges is lost; on V16 the extra region overlaps sequence data and Bluetooth pairings. This is not a complete settings or Bluetooth reset. Using ${state.stock.name || "the template package"}.`
       : "Needs the official V15 package: M-VAVE's loader and the startup code it writes come from it.";
     $("wipe-pick").hidden = !!state.stock;
   }
@@ -902,11 +900,22 @@ async function install(startup = null, throughBridge = false) {
     if (sequenced) {
       if (!state.sequence) {
         const passes = throughBridge ? [await loadBridge(), pkg] : await wipePasses(state.stock, pkg);
-        state.sequence = { kind: throughBridge ? "bridge" : "wipe", passes, at: !throughBridge && passes.length === 2 && dev.id.text === "FM-1_015" ? 1 : 0 };
+        const voiceBanks = throughBridge ? null : await factoryBanks();
+        state.sequence = { kind: throughBridge ? "bridge" : "wipe", passes, voiceBanks, banksDone:false,
+          at: !throughBridge && dev.id.text === "FM-1_015" ? 1 : 0 };
       }
       const run = state.sequence, first = run.at;
       for (; run.at < run.passes.length; run.at++) {
         if (run.at > first) up.pinVerified(run.passes[run.at - 1].product);
+        if (run.kind === "wipe" && run.at === 1 && !run.banksDone) {
+          phase = "Voice-region cleanup";
+          note("info", "CLEANUP", phase, "V15 is the temporary maintenance step. Applying valid data to its 16 KiB voice region, beyond the firmware wipe’s reach, before installing your selected firmware.");
+          say("Applying valid data to the saved-voice region. Keep the FM-1 connected.");
+          const result = await writeBanks(up, run.voiceBanks, ({bytes,total}) => to(bytes / total * 100, "Applying valid voice data"));
+          run.banksDone = true;
+          log(`Voice-region cleanup: ${result.bytes} bytes acknowledged by V15.`);
+          note("go", "READY", "Voice region prepared", "V15 acknowledged all four bank writes. Continuing to your selected firmware. This is not a full-flash erase or a readback verification.");
+        }
         sent = run.passes[run.at]; reads = 0; wrote = false; pct = 0;
         total = Math.max(1, Math.round(sent.image.length / 512));
         phase = `${run.kind === "bridge" ? "Install" : "Wipe"} pass ${run.at + 1} of ${run.passes.length}`;
@@ -914,7 +923,7 @@ async function install(startup = null, throughBridge = false) {
         note("info", "PASS", phase, run.kind === "bridge" ? (bridge
           ? "Installing the reviewed fm1-base template 0.3 with its application-only writer, preserving startup code. Waiting for its identity before installing your selected firmware."
           : `The temporary updater answered. Installing your selected ${pkg.product} package normally, without an extended wipe or m-bootloader installation.`) : bridge
-          ? "Installing V15’s application only, preserving startup code. The extended wipe has not run yet. Waiting for V15 to answer before continuing."
+          ? `Temporarily installing V15${sent.loader === "app" ? " with the application-only writer, preserving startup code" : " with the official writer"}. V15 must answer before the voice-region cleanup and final firmware install.`
           : `Using the official loader to write ${pkg.product}, replace startup code with V15’s, and erase the remaining space below ${hex(WIPE_END)}.`);
         log(`${phase}: ${sent.product}, flash.bin ${hex(sent.flashLen)}, ${sent.image.length} bytes`);
         if (resume && run.at === first) {
@@ -958,7 +967,7 @@ async function install(startup = null, throughBridge = false) {
     if (e.code === "open") note("barrier", "REFUSED", "M-VAVE's Open firmware", `${e.message} Nothing was sent.`);
     if (refusal) note("barrier", "REFUSED", "Step 1: refused by the FM-1's firmware", refusal);
     else if (e.code === "stopped" && e.step === 1) note("barrier", "REFUSED", "Step 1: stopped by the FM-1's firmware", `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written. Which check stopped it is not known for this firmware.`);
-    if (state.sequence) note("note", "NEXT", `${phase || "Preparation"} stopped`, `The ${doWipe ? "extended wipe" : "two-pass installation"} is incomplete. ${state.sequence.at > 0 ? "The temporary firmware pass completed; it is not rolled back. " : ""}Keep this page open: retry continues this pass, or finishes it if the update loader answers. m-bootloader was not attempted.`);
+    if (state.sequence) note("note", "NEXT", `${phase || "Preparation"} stopped`, `The ${doWipe ? "extended wipe" : "two-pass installation"} is incomplete. ${state.sequence.at > 0 ? "The V15 or temporary-firmware stage has been reached; it is not rolled back. " : ""}${phase === "Voice-region cleanup" ? "The voice region may be partly replaced. Retry rewrites all four banks before the final install. " : ""}Keep this page open: retry continues this pass, or finishes it if the update loader answers. m-bootloader was not attempted.`);
     say(e.code === "open" ? e.message : e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${sent.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? `Stopped: the FM-1's firmware refused this pass. ${state.sequence?.at > 0 ? "Earlier passes remain installed." : "No firmware was installed."} Details on the route above.` : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
     state.frozen = null;
     progress(null);

@@ -59,15 +59,18 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   so every sector in that range is erased first (saved projects and settings kept there are lost). The package is built
   from the official V15 package's loader and startup code plus the chosen firmware's app area, the way a Baudgirl
   release is V15 with another flash.bin; the builder reproduces all ten Baudgirl packages inspected byte for byte.
-  This is not a complete settings or Bluetooth reset: V16's settings start at 0xBA000, and stock V15/V16 Bluetooth
-  pairings lie beyond the wipe range. Only the verified V15 file is accepted as the template; choosing it in the
-  wipe dialog does not change the final target firmware. For standard application-loader packages, this takes two passes:
-  install V15's application using the selected package's application-only writer (startup code preserved), verify V15
-  answers, then install the extended wipe package. If V15 already answers, skip the first pass. Other packages use the
-  existing single-pass path and may be refused by the running firmware. Both packages are prepared before writing.
-  **The two-pass route is host tested, not device tested.** V15 booting with retained custom startup code remains
-  unverified; failure can require external recovery. Keep the page open: retry/resume retains the exact current pass
-  in memory, but reloading loses it. Cancelling remaining passes does not undo a completed V15 install.
+  Cleanup first reaches verified official V15 as a temporary maintenance step, then applies fixed valid data to
+  the 16 KiB voice region at 0xEA000–0xEE000, beyond the firmware wipe's reach, before installing the chosen firmware.
+  This replaces all 128 stored voices. In V16 that extra region overlaps sequence data and Bluetooth pairings;
+  its settings region at 0xBA000–0xDA000 remains outside the planned writes. This is not a whole-flash reset.
+  The four data files are pinned by SHA-256 and checked before any installation starts. Each erase and write must
+  be acknowledged; this is not a readback check. A failed data step stops the final install, and retry rewrites all four banks.
+  Only the verified V15 file is accepted as the template; it never replaces the user's final firmware selection.
+  Standard application-loader packages use their own writer for the first V15 pass, preserving startup code;
+  other packages use V15's official writer, which the running firmware may refuse. If V15 already answers, its install is skipped.
+  V15 booting with retained custom startup code remains unverified; failure can require external recovery.
+  Keep the page open: retry/resume retains the exact current step in memory, but reloading loses it.
+  Cancelling remaining passes does not undo completed writes. Normal installs and the generic temporary-updater route do not add this cleanup.
 - Optional **m-bootloader installation** requires support in the selected firmware's updater, which runs after the
   firmware install. An application-only update loader does not establish that support. The option appears only for
   reviewed package hashes and is always omitted with a wipe. Unknown builds remain hidden rather than guessed compatible.
@@ -153,8 +156,9 @@ flowchart TD
   K --> M[Install: the FM-1's own firmware looks at the package first]
   K -- official package with community firmware, if chosen --> B1[Generic template updater first. Verify its identity, then install the original selection normally]
   B1 --> O
-  K -- application-loader extended wipe --> P[Pass 1: V15 application only, startup code kept. Verify V15 before continuing. Skip if V15 already runs]
-  P --> P2[Pass 2: official loader installs chosen firmware and wipes to 0xBA000. No m-bootloader afterwards]
+  K -- optional extended cleanup --> P[Temporarily reach verified V15. Skip if V15 already runs]
+  P --> PB[Apply valid data at 0xEA000–0xEE000. Require every acknowledgement]
+  PB --> P2[Pass 2: official loader installs chosen firmware and wipes to 0xBA000. No m-bootloader afterwards]
   P2 --> O
   M --> N{Does it accept it?}
   N -- yes --> O[The FM-1 writes it and restarts. The page checks it came back as the new firmware. Done]
@@ -213,11 +217,16 @@ automatic post-install scan rediscovered V15 about 1.58 seconds after completion
 not every custom build sharing the older `FM-1_700` identity. No extended wipe or startup-byte substitution was used.
 The device owner reported incorrect preset sounds afterward. **Returning to V15 does not restore its factory voice banks.**
 Optimist can reuse that storage; its own installer and [M-VAVE’s Workbench](https://open.m-vave.com/fm1-workbench)
-provide a separate bank-restoration operation. The site now warns when V15 is selected and explains the manufacturer's
-factory-voice route in Backup & Recovery. That operation replaces all 128 stored voices and has not been exercised here;
+provide a separate bank-restoration operation. The optional cleanup sequence now includes a separate valid-data write to that region;
 the recovery test establishes boot and identity, not factory sound/data restoration.
 
-Those wipe runs cover the earlier single-pass route. Not tested on a device: the two-pass V15 wipe, finishing an interrupted update,
+The current cleanup was also tested on an FM-1: starting on V15, all 16 KiB of valid voice data were acknowledged,
+then the extended wipe installed the selected 386DX package. A second run completed the full sequence
+`FM-1_3860070` → `FM-1_015` → all four bank writes acknowledged → `FM-1_3860070`, with the original selection
+retained and the final identity rediscovered automatically. These runs used stock startup code. V15 booting with
+retained custom startup code, including m-bootloader, remains unverified. The data acknowledgements are not readback verification.
+
+Not tested on a device: finishing an interrupted update,
 the separate startup-byte substitution workaround, boot-mode detection, the wrong-model refusal, m-bootloader's recovery menu and download-mode keys. Out of scope:
 how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 
@@ -248,6 +257,7 @@ Optional third and fourth fixture paths exercise an application-loader package a
 visibility, V15 template validation, the two-pass identity gate and phase-specific resume, replacing installation methods
 with simulations so no write command is sent. A sixth fixture is the pinned fm1-base template 0.3; it checks the
 generic route's hash guard, first-pass identity gate, unchanged target and exclusion of wipe/boot options.
+`node tools/test-banks.mjs` checks pinned cleanup data, DX7 validation, exact storage commands and destinations, selected-port/V15 identity gates, and stopping on a missing acknowledgement.
 `node tools/test-updater.mjs` checks next-pass port binding with two simulated devices. `node tools/test-wipe.mjs /path/to/V15.fwsc /path/to/application-loader.fwsc` checks the generated packages' writers and payloads.
 
 ## Lineage and licence

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
-import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.16";
-import { sha256hex } from "./fm1pkg.js?v=2026-10-26.16";
+import { inspectFlash, inspectBackup, packageFlash, writePlan, regionEffect, compareLayouts, compareBytes, FLASH_SIZE, rangeText, address } from "./flash.js?v=2026-10-26.17";
+import { sha256hex } from "./fm1pkg.js?v=2026-10-26.17";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -32,7 +32,7 @@ function table(regions, plan = null) {
 function map(plan) {
   const root = el("div", null, "flash-map");
   root.setAttribute("role", "img");
-  root.setAttribute("aria-label", plan.known ? "Expected firmware write ranges: " + plan.ranges.map((r) => rangeText(r.start, r.end)).join("; ") : "Firmware write range unknown");
+  root.setAttribute("aria-label", plan.known ? "Expected write ranges: " + plan.ranges.map((r) => rangeText(r.start, r.end)).join("; ") : "Firmware write range unknown");
   if (plan.known) {
     for (const r of plan.ranges) {
       const band = el("span", null, "flash-band");
@@ -114,7 +114,7 @@ export function setupFlashView() {
       }
       const diff = compareBytes(backup, pkg, plan, options.stock);
       info.append(el("p", diff
-        ? `${size(diff.different)} differ across ${size(diff.compared)} compared in the expected firmware write ranges.${diff.unavailable ? ` Another ${size(diff.unavailable)} cannot be compared because the final bytes are unavailable.` : ""}`
+        ? `${size(diff.different)} differ across ${size(diff.compared)} compared in the expected write ranges.${diff.unavailable ? ` Another ${size(diff.unavailable)} cannot be compared because the final bytes are unavailable.` : ""}`
         : "Byte comparison unavailable: the loader's write range is unknown."));
       if (diff) {
         const s = diff.sectors;

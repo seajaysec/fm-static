@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.16">
+<link rel="stylesheet" href="style.css?v=2026-10-26.17">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -85,7 +85,6 @@
   <section class="stage" id="st-start">
     <h2>Flash firmware</h2>
     <p id="flash-selection">Choose firmware in the shared Firmware file panel to begin.</p>
-    <p id="v15-voices" class="small warn" hidden>Returning to V15 restores the firmware, not its factory voice banks. Community firmware can leave incompatible sound data behind. If the presets sound wrong afterward, <a href="#factory-voices">restore the factory voices separately</a>; that replaces all 128 stored voices.</p>
       <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from a source I trust and accept the risk of installing it.</label></p>
       <p id="connect-row" class="next"><button id="connect" aria-describedby="connect-hint" disabled>Connect your FM-1</button> <span id="connect-hint" class="small">Load a firmware file first.</span></p>
     <p id="status" role="status"></p>
@@ -139,9 +138,10 @@
           <div>
             <b>Wipe application/data area</b>
             <p>Usually unnecessary—try a normal install first. This optional extended wipe is offered for convenience and may be worth trying if a normal flash fails.</p>
-            <p><label><input id="wipe" type="checkbox"> Erase flash up to 0xBA000 while installing</label></p>
+            <p><label><input id="wipe" type="checkbox"> Clean application/data areas before installing</label></p>
             <p id="wipe-method" class="warn"></p>
             <p id="wipe-info" class="small"></p>
+            <p class="small">The extra voice-region step uses the <a href="https://github.com/KingParamount/fm1-factory-presets" target="_blank" rel="noopener">factory data recovered by KingParamount</a>, pinned and checked before cleanup starts. <a href="vendor/factory-voices/LICENCE.md" target="_blank" rel="noopener">Source licence</a>.</p>
             <p id="wipe-pick" class="small" hidden><button id="stock-open" class="small" type="button">Choose the official V15 package</button></p>
           </div>
         </li>
@@ -248,7 +248,7 @@
         <div class="wf-node"><span class="wf-number" aria-hidden="true">3</span><h3>Prepare the install</h3><p>Back up what you need. Choose the optional area wipe or bootloader install.</p></div>
         <div class="wf-branches">
           <div class="wf-detour"><h4>M-VAVE Open firmware?</h4><p>The page arms its updater with the package hash. Return to M-VAVE firmware first if it will not accept your chosen package.</p></div>
-          <div class="wf-detour"><h4>What gets overwritten?</h4><p>Layout Analysis shows expected firmware writes. The area wipe ends at 0xBA000; it is not a full settings or Bluetooth reset.</p></div>
+          <div class="wf-detour"><h4>What gets overwritten?</h4><p>Layout Analysis shows expected writes: optional cleanup covers below 0xBA000 plus valid voice data at 0xEA000–0xEE000. It is not a full reset.</p></div>
         </div>
       </li>
       <li>
@@ -258,7 +258,7 @@
           <div class="wf-detour"><h4>Official firmware refused?</h4><p>Install through the generic temporary updater, then your selected firmware. Both identities are checked. Tested from Optimist 0.2 synths with m-bootloader back to V15.</p></div>
           <div class="wf-detour wf-untried"><h4>Startup-code refusal?</h4><p>The opt-in restore step offers another route. Read its risks before proceeding.</p></div>
           <div class="wf-detour wf-untried"><h4>Write interrupted?</h4><p>If the update loader still answers, reconnect and use Finish update.</p></div>
-          <div class="wf-detour wf-untried"><h4>Extended wipe?</h4><p>Application-loader packages take two passes through V15. Both passes must finish. Not yet device tested.</p></div>
+          <div class="wf-detour"><h4>Extended cleanup?</h4><p>V15 is a temporary maintenance step: apply valid voice data beyond the firmware’s reach, then wipe and install your chosen firmware. The complete sequence must finish.</p></div>
           <div class="wf-detour"><h4>Bootloader selected?</h4><p>Offered for reviewed compatible releases only; skipped with a wipe.</p></div>
         </div>
       </li>
@@ -351,9 +351,10 @@
       </details>
       <details id="factory-voices" tabindex="-1">
         <summary>V15 runs, but its presets sound wrong</summary>
-        <p>A successful firmware install is not a factory reset. Community firmware such as Optimist uses storage that V15 expects to hold its voice banks. This page installs V15 but does not restore those banks; incompatible data can make the sounds wrong even when the firmware identity is correct.</p>
-        <p>Use <a href="https://open.m-vave.com/fm1-workbench" target="_blank" rel="noopener">M-VAVE’s Open Workbench</a>: choose <b>Restore original V15</b>, connect and acknowledge your backup. For a device already running V15, its install action becomes <b>Restore factory voices</b> and skips reflashing. Accept its overwrite warning, wait for completion, then select a voice again to audition it.</p>
-        <p class="warn">This replaces all four banks—128 stored voices—with the factory sounds. Preserve any stock voices you want to keep first. It is a separate data-writing operation, not the extended area wipe or a full-flash backup restore. The factory-bank restoration itself has not been tested here.</p>
+        <p>A successful firmware install is not a factory reset. Community firmware such as Optimist uses storage that V15 expects to hold its voice banks. Installing V15 alone leaves that sound data in place.</p>
+        <p>The optional <b>Wipe application/data area</b> route uses V15 as a temporary maintenance step. It applies valid data to the 16 KiB saved-voice region, then continues to your chosen firmware.</p>
+        <p class="warn">This replaces all 128 stored voices and also erases below 0xBA000. The extra region at 0xEA000–0xEE000 overlaps sequence data and Bluetooth pairings in V16. It does not reset the whole flash or every setting.</p>
+        <p class="small"><a href="https://open.m-vave.com/fm1-workbench" target="_blank" rel="noopener">M-VAVE’s Open Workbench</a> is an alternative for the bank set embedded in the official firmware package.</p>
       </details>
     </div>
   </section>
@@ -444,7 +445,7 @@
             <th scope="row" role="rowheader">Optional application/data wipe</th>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Manufacturer Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Stock voice restore; different scope</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Generic Community Flasher</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">Firmware-dependent</span></div></td>
-            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Wipe below 0xBA000 alongside install</span></div></td>
+            <td role="cell" class="featured"><span class="feature-tool" aria-hidden="true">FM-Static</span><div class="feature-value" data-status="supported"><span class="feature-mark status-supported"><span aria-hidden="true">✓</span><span class="sr-only">Supported as described:</span></span><span class="feature-description">Wipe below 0xBA000 and apply valid voice data beyond it, then install</span></div></td>
             <td role="cell"><span class="feature-tool" aria-hidden="true">Beyond the browser</span><div class="feature-value" data-status="partial"><span class="feature-mark status-partial"><span aria-hidden="true">~</span><span class="sr-only">Limited, variable, or different approach:</span></span><span class="feature-description">M-Flasher: settings wipe covers different regions</span></div></td>
           </tr>
           <tr role="row">
@@ -510,7 +511,7 @@
       </table>
       <p class="small comparison-intro">The manufacturer and current Felucca installer also check the returning firmware identity and offer interrupted-update retries. FM-Static’s Finish update path is implemented but not yet device-tested. Its extra help includes selectable ports, explanations for known refusals, and an opt-in startup-code restore.</p>
       <div id="comparison-notes" class="comparison-notes">
-        <p><b>About the V15 gate.</b> Choose your next firmware directly. FM-Static checks the connected device and package without imposing a V15-first step. Community installers vary: some enforce that step, others do not. The device can still refuse an incompatible package. Our optional area wipe uses a V15 file as a template, without requiring V15 to be installed first.</p>
+        <p><b>About the V15 gate.</b> Choose your next firmware directly. FM-Static checks the connected device and package without imposing a V15-first step. Community installers vary: some enforce that step, others do not. The device can still refuse an incompatible package. Our optional area wipe uses a V15 file as a template, and installs V15 temporarily when needed; you do not need to install it yourself.</p>
         <p><b>Where the browser stops.</b> This page can inspect a raw backup but cannot read or restore the device’s whole flash. Its MIDI updater cannot replace native access to the chip’s protected USB mass-storage interface. Transporter uses a separate hardware bridge and its own app. <a href="#desktop-recovery">Choose a backup or recovery tool</a>.</p>
       </div>
       <details class="comparison-sources"><summary>Comparison sources and limits</summary>
@@ -540,10 +541,10 @@
 
   <dialog id="stock-dialog" aria-labelledby="sdlg-h">
     <h3 id="sdlg-h">One more file: official V15</h3>
-    <p class="warn">For an application-loader package, V15 runs temporarily in pass 1. Pass 2 performs the extended wipe and installs your selected firmware. Keep this page open until both passes finish.</p>
+    <p class="warn">V15 runs temporarily so the cleanup can apply valid data beyond the firmware wipe’s reach. It then wipes and installs your selected firmware. Keep this page open until the sequence finishes.</p>
     <p>You already chose <b id="sdlg-main"></b>. That is the firmware that ends up on your FM-1.</p>
     <p>The application/data wipe is written by M-VAVE's update loader, which comes with the official V15 package: the page builds the
-      final package from the V15 loader and startup code plus your firmware. In the two-pass route, V15’s application is also used for the first pass.</p>
+      final package from the V15 loader and startup code plus your firmware. V15’s application is also used for the temporary maintenance step.</p>
     <p><a href="https://web.archive.org/web/20260906194826id_/https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc" target="_blank" rel="noopener">Download official V15 (.fwsc, archived copy)</a>. Then choose the downloaded file below.</p>
     <p><input id="stockfile" type="file" accept=".fwsc" aria-label="Official V15 package"></p>
     <p id="sdlg-msg" class="small" hidden></p>
@@ -551,8 +552,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.16</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.17</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.16"></script>
+<script type="module" src="src/app.js?v=2026-10-26.17"></script>
 </body>
 </html>
