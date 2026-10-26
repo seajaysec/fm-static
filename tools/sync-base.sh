@@ -10,6 +10,9 @@ v=vendor/fm1-base
 cp "$src/web/fm1ota.js" "$src/web/fm1pkg.js" "$v/"
 cp "$src/web/m-bootloader/fm1-uboot-1.2.fwsc" "$src/web/m-bootloader/LICENSE" "$v/m-bootloader/"
 cp "$src/LICENSE" "$v/LICENSE-MPL-2.0.txt"
+# the backup and restore protocol: the lines of web/backup/index.html between its "backup protocol" markers, verbatim. They define FW (the
+# firmware's name, identity prefix, backup magic, version and file extension, as {{...}} placeholders) and PB, the protocol
+awk '/backup protocol: begin/{f=1; next} /backup protocol: end/{f=0} f' "$src/web/backup/index.html" > "$v/backup-protocol.txt"
 sum() { shasum -a 256 "$1" | cut -c1-64; }
 {
   echo "# Where these files come from: copied unmodified from https://github.com/charlesvestal/fm1-base (MPL-2.0; m-bootloader: MIT)."
@@ -20,6 +23,7 @@ sum() { shasum -a 256 "$1" | cut -c1-64; }
   echo "web/fm1ota.js $(sum $v/fm1ota.js)"
   echo "web/fm1pkg.js $(sum $v/fm1pkg.js)"
   echo "web/m-bootloader/fm1-uboot-1.2.fwsc $(sum $v/m-bootloader/fm1-uboot-1.2.fwsc)"
+  echo "web/backup/index.html:protocol $(sum $v/backup-protocol.txt)"
 } > "$v/SOURCE"
 [ -z "$tmp" ] || rm -rf "$tmp"
 node tools/check-vendor.mjs

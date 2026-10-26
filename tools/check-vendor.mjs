@@ -9,8 +9,8 @@ let bad = 0;
 const need = (ok, what) => { console.log((ok ? "ok      " : "MISSING ") + what); if (!ok) bad++; };
 
 const pin = Object.fromEntries(read("vendor/fm1-base/SOURCE").toString().split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(" ")));
-for (const f of ["web/fm1ota.js", "web/fm1pkg.js", "web/m-bootloader/fm1-uboot-1.2.fwsc"]) {
-  const got = createHash("sha256").update(read("vendor/fm1-base/" + f.replace("web/", ""))).digest("hex");
+for (const f of ["web/fm1ota.js", "web/fm1pkg.js", "web/m-bootloader/fm1-uboot-1.2.fwsc", "web/backup/index.html:protocol"]) {
+  const got = createHash("sha256").update(read("vendor/fm1-base/" + (f.endsWith(":protocol") ? "backup-protocol.txt" : f.replace("web/", "")))).digest("hex");
   need(pin[f] === got, `${f} matches the hash in SOURCE`);
 }
 const ota = await import(new URL("vendor/fm1-base/fm1ota.js", root));
@@ -24,4 +24,7 @@ need(/async install\(image, product, onStep, sha256\)/.test(src), "install(image
 need(/step\("start"/.test(src) && /step\("verify"/.test(src) && /step\("loader"/.test(src) && /step\("write"/.test(src) && /step\("reboot"/.test(src) && /step\("done"/.test(src), "the step names the page shows");
 const pkg = await import(new URL("vendor/fm1-base/fm1pkg.js", root));
 need(typeof pkg.productOf === "function" && typeof pkg.logicalImage === "function", "fm1pkg.js exports productOf, logicalImage");
+const bk = read("vendor/fm1-base/backup-protocol.txt").toString();
+need(/const FW = \{[^;]*\};/.test(bk) && /const PB = \(\(\) => \{/.test(bk), "backup protocol: FW and PB are defined");
+need(/return \{[^}]*\bbackup\b[^}]*\brestore\b[^}]*\}/s.test(bk) && /\bparse\b/.test(bk), "backup protocol: PB offers backup, restore, parse");
 process.exit(bad ? 1 : 0);

@@ -24,7 +24,17 @@
     <p>fm-static installs a <code>.fwsc</code> firmware file on an M-VAVE FM-1. Use it when you're finding it hard to get your
       FM-1 to flash through other means. Bring a <code>.fwsc</code> file and follow the process through to the end.</p>
     <p class="small">It is made for the M-VAVE FM-1. The SMK-37 may work; that is completely untested. It checks that the FM-1 comes back running what you installed, not how it sounds.</p>
+    <details class="small v15note"><summary>Do I need official V15 first?</summary>
+      <p>No. Some installers and firmwares caution against installing anything else until you have gone through M-VAVE's official V15. We haven't found a strong reason for that: this page installs any valid package over whatever firmware answers it. The two refusals seen so far (a package bigger than V15's, and a startup-code mismatch) can be got around by installing through a firmware that accepts the package (M-VAVE's V16, or any firmware on a recent fm1-base), or by the restore step, which has not been tried on an FM-1 yet.</p>
+      <p>If you would like to go through V15 anyway, here it is: the original V15 is inside M-VAVE's Workbench download. Paste <code>https://open.m-vave.com/fm1-workbench</code> in the address box below, save the file it points to, then drop it here: the page finds V15 inside it.</p>
+    </details>
   </section>
+
+  <nav class="tabs" role="tablist" aria-label="What to do">
+    <button id="tab-install-b" role="tab" aria-selected="true" aria-controls="tab-install">Install firmware</button>
+    <button id="tab-backup-b" role="tab" aria-selected="false" aria-controls="tab-backup">Back up &amp; restore</button>
+  </nav>
+  <div id="tab-install" role="tabpanel">
 
   <section class="stage" id="st-file" data-state="now">
     <h2>Firmware file</h2>
@@ -190,9 +200,33 @@
     <p><button id="sdlg-close" class="small" type="button">Close</button></p>
   </dialog>
 
+  </div>
+
+  <div id="tab-backup" role="tabpanel" hidden>
+    <section class="stage" id="st-backup" data-state="now">
+      <h2>Back up &amp; restore</h2>
+      <p class="lead dim">Separate from installing: do it before, after, or on its own. A backup is what the firmware on the FM-1 keeps (projects, presets, banks), not a copy of the firmware itself.</p>
+      <p id="bk-connect" class="next"><button id="bk-connect-go">Connect FM-1</button> <span class="small">Asks the browser for MIDI access, the same as Install.</span></p>
+      <div id="bk-body" hidden>
+        <ol id="bk-route" class="route"></ol>
+        <div id="bk-actions" hidden>
+          <h3>Back up</h3>
+          <p id="bk-what" class="small"></p>
+          <p><button id="bk-go">Back up and download</button></p>
+          <h3>Restore</h3>
+          <p class="small">Restoring writes to the FM-1. Different firmwares keep their saves in different formats, so this page can say whether a file looks like it belongs to the FM-1 you connected, but cannot promise a restore from another firmware or version will come out as you expect. The FM-1 asks for confirmation on its own buttons before anything changes.</p>
+          <label id="bk-drop" class="plainpick">Choose a backup file <input id="bk-file" type="file" aria-label="Backup file"></label>
+          <div id="bk-verdict" hidden></div>
+          <p><button id="bk-restore" disabled>Restore this backup</button></p>
+        </div>
+        <p id="bk-status" role="status"></p>
+      </div>
+    </section>
+  </div>
+
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.31</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.33</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.31"></script>
+<script type="module" src="src/app.js?v=2026-10-25.33"></script>
 </body>
 </html>

@@ -53,7 +53,7 @@ To fix the name itself on a Mac: Audio MIDI Setup, Window, Show MIDI Studio, dou
 
 The update protocol and the package reader are [fm1-base](https://github.com/charlesvestal/fm1-base)'s, copied unmodified into
 `vendor/fm1-base/` (recorded in `vendor/fm1-base/SOURCE`). `src/updater.js` adds what the page does on top: finding the FM-1 under any
-port name, following the ports through the update loader, the restore step, and what step 1 refused. To take fm1-base's latest:
+port name, following the ports through the update loader, the restore step, and what step 1 refused. `src/backup.js` and the Back up & restore tab use fm1-base's backup protocol (`vendor/fm1-base/backup-protocol.txt`, the lines of its backup page between its markers) for the firmwares whose four constants are known (LOOM-8, Mutable Dreams); other families are pointed to where their saves live. To take fm1-base's latest:
 `tools/sync-base.sh`. A weekly GitHub job does the same and opens a pull request when anything changed, so fixes arrive for review
 and nothing reaches the page without a merge. `node tools/check-vendor.mjs` checks the copies still offer what the adapter uses.
 
@@ -96,9 +96,9 @@ Run on a real FM-1 (macOS, Chrome): installs in every direction between official
 Felucca-family firmwares and Mutable Dreams, with and without the full wipe; a real refusal by a newer Felucca and the way
 round it; installing m-bootloader after a firmware and then putting M-VAVE's V16 back over it; a package found through a
 GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
-update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page.
+update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page. Back up & restore: on Mutable Dreams, a backup read from the FM-1 and saved (its saves were empty, so the file is 196 bytes), and a restore request, to which the FM-1 showed its own "RESTORE FROM USB?" prompt.
 
-Not tested on a device: finishing an interrupted update, the startup-code refusal and the restore step, boot-mode
+Not tested on a device: a backup of something saved and a restore that was confirmed on the FM-1 (SEL), backup and restore on LOOM-8, finishing an interrupted update, the startup-code refusal and its restore step, boot-mode
 detection, the wrong-model refusal, m-bootloader's recovery menu and update-mode keys. Out of scope:
 how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 

@@ -6,3 +6,4 @@ date 2026-10-25
 web/fm1ota.js e5043b9104fa01eff7cb6c279a88f5d2f4822a033d6ad05530bf4dab62bb6172
 web/fm1pkg.js cf2310bd0e0c6053b15d0bbbe94bdc960b2f34c0917540a196556cdcebfca1da
 web/m-bootloader/fm1-uboot-1.2.fwsc 0e89141f52d1f2d62198d4f69147a2c15c8360806e64d48002990a6fdab6d6dd
+web/backup/index.html:protocol 4b4782d3cc6adc99535ec7fbbe35c7d756b9db7042ffe17c8dcd1b0d616c8df2

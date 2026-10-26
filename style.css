@@ -191,3 +191,13 @@ dialog h3 { margin-top: 0; }
 .dg-dark { display: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dg-light { display: none; } :root:not([data-theme="light"]) .dg-dark { display: block; } }
 :root[data-theme="dark"] .dg-light { display: none; } :root[data-theme="dark"] .dg-dark { display: block; }
+
+/* tabs: install, and back up & restore */
+.tabs { display: flex; gap: 6px; margin-top: 20px; flex-wrap: wrap; }
+.tabs button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-bottom: 3px solid transparent; padding: 8px 16px; font: inherit; cursor: pointer; }
+.tabs button[aria-selected="true"] { border-bottom-color: var(--orange); font-weight: 700; }
+.plainpick { display: block; margin: 8px 0; }
+#bk-verdict p { margin: 6px 0; }
+.bk-yes, .bk-likely { border-left: 4px solid var(--go); padding-left: 10px; }
+.bk-maybe, .bk-unlikely { border-left: 4px solid var(--orange); padding-left: 10px; }
+.bk-no { border-left: 4px solid var(--stop); padding-left: 10px; }
