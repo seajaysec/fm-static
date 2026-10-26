@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.17";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.17";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.17";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.17";
-import { setupTabs } from "./tabs.js?v=2026-10-26.17";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.17";
-import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.17";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.18";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.18";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.18";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.18";
+import { setupTabs } from "./tabs.js?v=2026-10-26.18";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.18";
+import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.18";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.17";
+const VERSION = "2026-10-26.18";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -810,7 +810,7 @@ function refresh() {
     ? "This exact firmware release and the bundled m-bootloader installer were tested together on an FM-1 through this page."
     : "This exact firmware release’s updater supports the standalone installer (source checked and host tested). This pairing has not been tested on a device.";
   if (canWipe) {
-    $("wipe-method").textContent = "Temporarily reach V15, apply valid data to its saved-voice region beyond the firmware’s reach, then wipe and install your selected firmware. If V15 already answers, its install is skipped. Keep this page open through the sequence; m-bootloader installation is skipped." + (pkg.loader === "app" ? " The first pass preserves startup code; V15 booting with custom startup code remains unverified and failure can require external recovery." : " The temporary V15 install uses its official writer; the running firmware may refuse a startup-code change.");
+    $("wipe-method").textContent = "Temporarily reach V15, apply valid data to its saved-voice region beyond the firmware’s reach, then wipe and install your selected firmware. If V15 already answers, its install is skipped. Keep this page open through the sequence; m-bootloader installation is skipped." + (pkg.loader === "app" ? " The first pass preserves startup code. Tested from Optimist 0.2 synths with m-bootloader 1.2 and 386DX FM-1_3860070 selected. Other target writers and custom startup code remain unverified; failure can require external recovery." : " The temporary V15 install uses its official writer; the running firmware may refuse a startup-code change.");
     $("wipe-info").textContent = state.stock
       ? `Writes ${pkg.product} and erases below ${hex(WIPE_END)}, plus replaces the 16 KiB voice region at 0xEA000–0xEE000 with valid data. Existing data in those ranges is lost; on V16 the extra region overlaps sequence data and Bluetooth pairings. This is not a complete settings or Bluetooth reset. Using ${state.stock.name || "the template package"}.`
       : "Needs the official V15 package: M-VAVE's loader and the startup code it writes come from it.";

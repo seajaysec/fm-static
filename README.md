@@ -68,7 +68,7 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   Only the verified V15 file is accepted as the template; it never replaces the user's final firmware selection.
   Standard application-loader packages use their own writer for the first V15 pass, preserving startup code;
   other packages use V15's official writer, which the running firmware may refuse. If V15 already answers, its install is skipped.
-  V15 booting with retained custom startup code remains unverified; failure can require external recovery.
+  The V15 pitstop was device tested from Optimist 0.2 synths with m-bootloader 1.2 retained and 386DX FM-1_3860070 selected. Other target writers and custom startup code remain unverified; failure can require external recovery.
   Keep the page open: retry/resume retains the exact current step in memory, but reloading loses it.
   Cancelling remaining passes does not undo completed writes. Normal installs and the generic temporary-updater route do not add this cleanup.
 - Optional **m-bootloader installation** requires support in the selected firmware's updater, which runs after the
@@ -223,8 +223,22 @@ the recovery test establishes boot and identity, not factory sound/data restorat
 The current cleanup was also tested on an FM-1: starting on V15, all 16 KiB of valid voice data were acknowledged,
 then the extended wipe installed the selected 386DX package. A second run completed the full sequence
 `FM-1_3860070` → `FM-1_015` → all four bank writes acknowledged → `FM-1_3860070`, with the original selection
-retained and the final identity rediscovered automatically. These runs used stock startup code. V15 booting with
-retained custom startup code, including m-bootloader, remains unverified. The data acknowledgements are not readback verification.
+retained and the final identity rediscovered automatically. These initial runs used stock startup code.
+
+Further tests used only file selection and controls on the published website (version 2026-10-26.17), with no
+updater patches, direct MIDI commands or native recovery tools:
+
+- LOOM-8 0.9 with m-bootloader 1.2 accepted official V15 directly. With Optimist 0.2 synths selected next,
+  cleanup skipped the already-running V15 install, received acknowledgements for all 16 KiB of voice data,
+  and installed Optimist, returning as `FM-1_722`.
+- LOOM-8 0.9 and m-bootloader 1.2 were installed again, followed by a normal application-only Optimist 0.2 install.
+  A normal official V15 attempt then reproduced the four-request refusal without writing.
+- From that refusing state, selecting 386DX with cleanup completed `FM-1_722` → `FM-1_015` with m-bootloader
+  retained → all four bank writes acknowledged → `FM-1_3860070`. The final pass restored official startup code,
+  kept the original selection, and automatically rediscovered the final firmware.
+
+These results distinguish the running updater's acceptance rules from m-bootloader's presence alone. They do not
+cover every LOOM release or custom Optimist build. The data acknowledgements are not readback or audio verification.
 
 Not tested on a device: finishing an interrupted update,
 the separate startup-byte substitution workaround, boot-mode detection, the wrong-model refusal, m-bootloader's recovery menu and download-mode keys. Out of scope:
