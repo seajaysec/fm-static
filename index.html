@@ -30,9 +30,9 @@
     <h2>Firmware file</h2>
     <p class="lead dim">Any <code>.fwsc</code>. It is read in your browser and goes nowhere else.</p>
     <label id="drop" for="file">
-      <span class="drop-main">Drop a <code>.fwsc</code> file here, or click to choose one</span>
+      <span class="drop-main">Drop a <code>.fwsc</code> file here, or click to choose one<br><span class="small">A saved web page that carries firmware inside it works too (M-VAVE's Workbench holds the Open firmware).</span></span>
       <span class="drop-sub" id="drop-name">No file chosen</span>
-      <input id="file" type="file" accept=".fwsc" aria-label="Firmware file">
+      <input id="file" type="file" accept=".fwsc,.html,.htm" aria-label="Firmware file">
     </label>
     <form id="url-form" class="urlform" novalidate>
       <label for="url">Or paste the address of a page, or a GitHub repository, that offers the firmware</label>
@@ -191,8 +191,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.29</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.30</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.29"></script>
+<script type="module" src="src/app.js?v=2026-10-25.30"></script>
 </body>
 </html>

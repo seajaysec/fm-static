@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.29";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.29";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.29";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.30";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.30";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.30";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.29";
+const VERSION = "2026-10-25.30";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -196,7 +196,39 @@ async function loadFile(file, source = "") {
   refresh();
 }
 
-$("file").addEventListener("change", () => { $("url-results").replaceChildren(); $("url-msg").hidden = true; loadFile($("file").files[0]); });
+// A saved web page can carry firmware packages as base64 text (M-VAVE's Workbench holds the Open firmware and the original V15
+// that way). Long base64 runs are decoded and kept when they are valid FM-1 packages (checksums and all).
+async function embeddedPackages(text) {
+  const found = [];
+  for (const m of text.matchAll(/[A-Za-z0-9+/=]{60000,}/g)) {
+    try {
+      const bin = Uint8Array.from(atob(m[0]), (c) => c.charCodeAt(0));
+      const pkg = await inspect(bin);
+      found.push({ bytes: bin, product: pkg.product, kib: Math.round(bin.length / 1024) });
+    } catch (_) { /* not a package: an image, a script, a sound bank */ }
+  }
+  return found;
+}
+
+async function pickFile(file) {
+  $("url-results").replaceChildren(); $("url-msg").hidden = true;
+  if (file && /\.html?$/i.test(file.name)) {
+    urlMsg(`Looking for firmware inside ${file.name}…`);
+    const pkgs = await embeddedPackages(await file.text());
+    if (!pkgs.length) { urlMsg(`No firmware package found inside ${file.name}.`, "small err"); return; }
+    const use = (p) => loadFile(new File([p.bytes], `${p.product}.fwsc`), `inside ${file.name}`);
+    if (pkgs.length === 1) { urlMsg(""); await use(pkgs[0]); return; }
+    urlMsg(`${pkgs.length} firmware packages are inside ${file.name}. Pick one:`);
+    $("url-results").replaceChildren(...pkgs.map((p) => {
+      const b = make("button", { className: "small", type: "button", textContent: "Use this file" });
+      b.addEventListener("click", () => { $("url-results").replaceChildren(); urlMsg(""); use(p); });
+      return make("li", {}, make("span", { className: "dname", textContent: p.product }), make("span", { className: "meta", textContent: `${p.kib} KiB, inside the page` }), b);
+    }));
+    return;
+  }
+  await loadFile(file);
+}
+$("file").addEventListener("change", () => pickFile($("file").files[0]));
 
 // ------------------------------------------------- firmware from an address ---
 // The browser fetches the page itself and looks for .fwsc addresses in its source: nothing goes through any server of
@@ -365,7 +397,7 @@ function showList(urls, downloadOnly = []) {
 const drop = $("drop");
 for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
 for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });
-drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) pickFile(e.dataTransfer.files[0]); });
 $("trust").addEventListener("change", refresh);
 
 // -------------------------------------------------------------- port names ---
