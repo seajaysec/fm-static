@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.9">
+<link rel="stylesheet" href="style.css?v=2026-10-26.10">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -34,6 +34,10 @@
   <section class="stage" id="st-file" data-state="now" aria-labelledby="firmware-title">
     <h2 id="firmware-title">Firmware file</h2>
     <p class="lead dim">Choose once for Flash and Layout Analysis. Files are inspected locally; only Flash sends firmware to the device.</p>
+    <div id="firmware-loaded" class="firmware-loaded" role="status" hidden>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="2"/><path d="m8 16 5 5 11-11"/></svg>
+      <div><strong>Firmware loaded</strong><p id="file-selection" class="selected-file"></p></div>
+    </div>
     <fieldset id="firmware-inputs" aria-label="Choose firmware">
     <label id="drop" for="file">
       <span class="drop-main">Drop a .fwsc or saved updater page<br><span class="small">Or click to choose a file</span></span>
@@ -48,8 +52,18 @@
     <ul id="url-results" class="plain"></ul>
     </fieldset>
     <p id="file-msg" class="small" role="status">No firmware selected.</p>
-    <div id="fileinfo" hidden>
-      <p id="file-selection" class="selected-file"></p>
+
+  </section>
+
+  </div>
+
+  <div class="mode-tabs" role="tablist" aria-label="Flasher tools">
+    <button id="tab-flash" type="button" role="tab" aria-selected="true" aria-controls="panel-flash">Flash</button>
+    <button id="tab-advanced" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" tabindex="-1">Layout Analysis</button>
+    <button id="tab-recovery" type="button" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1">Backup &amp; Recovery</button>
+    <button id="tab-about" type="button" role="tab" aria-selected="false" aria-controls="panel-about" tabindex="-1">About</button>
+  </div>
+  <template id="package-details-template">
       <details id="file-details"><summary>Package details and checks</summary>
       <dl>
         <dt>File</dt><dd id="f-name"></dd>
@@ -62,24 +76,16 @@
       </dl>
       <ol id="route-file" class="route"></ol>
       </details>
-      <div id="install-analysis-warning" role="status"></div>
-    </div>
-  </section>
-
-  </div>
-
-  <div class="mode-tabs" role="tablist" aria-label="Flasher tools">
-    <button id="tab-flash" type="button" role="tab" aria-selected="true" aria-controls="panel-flash">Flash</button>
-    <button id="tab-advanced" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" tabindex="-1">Layout Analysis</button>
-    <button id="tab-recovery" type="button" role="tab" aria-selected="false" aria-controls="panel-recovery" tabindex="-1">Backup &amp; Recovery</button>
-    <button id="tab-about" type="button" role="tab" aria-selected="false" aria-controls="panel-about" tabindex="-1">About</button>
-  </div>
+  </template>
   <div id="panel-flash" role="tabpanel" aria-labelledby="tab-flash">
+  <section class="stage package-details" id="fileinfo" aria-label="Package details and checks" hidden>
+    <div id="install-analysis-warning" role="status"></div>
+  </section>
   <section class="stage" id="st-start">
     <h2>Flash firmware</h2>
     <p id="flash-selection">Choose firmware in the shared Firmware file panel to begin.</p>
       <p id="trust-row" class="trust" hidden><label><input id="trust" type="checkbox"> I got this file from a source I trust and accept the risk of installing it.</label></p>
-      <p id="connect-row" class="next"><button id="connect">Connect your FM-1</button> <span class="small">Next: this page checks the FM-1 against the file.</span></p>
+      <p id="connect-row" class="next"><button id="connect" aria-describedby="connect-hint" disabled>Connect your FM-1</button> <span id="connect-hint" class="small">Load a firmware file first.</span></p>
     <p id="status" role="status"></p>
   </section>
 
@@ -225,7 +231,9 @@
     <div class="wf-exit"><h3>Still stuck?</h3><p>Choose your next route in Backup &amp; Recovery: official updater, ROM-mode recovery, or the external Transporter hardware approach.</p><a href="#desktop-recovery">Go to backup and recovery tools</a></div>
   </section>
   </div>
-  <section id="panel-advanced" class="stage" role="tabpanel" aria-labelledby="tab-advanced" hidden>
+  <div id="panel-advanced" role="tabpanel" aria-labelledby="tab-advanced" hidden>
+  <section class="stage package-details" id="analysis-fileinfo" aria-label="Package details and checks" hidden></section>
+  <section class="stage">
     <h2>Layout Analysis</h2>
     <p>Inspect firmware, a flash backup, or both. Files stay in your browser. This tab does not connect to the FM-1, create backups or restore them.</p>
     <p id="analysis-source" class="small" role="status">Choose firmware in the shared Firmware file panel, or inspect a backup on its own.</p>
@@ -263,6 +271,8 @@
       </ol>
     </div>
   </section>
+
+  </div>
 
   <div id="panel-recovery" role="tabpanel" aria-labelledby="tab-recovery" hidden>
   <section class="stage" id="desktop-recovery" tabindex="-1" aria-labelledby="recovery-title">
@@ -468,8 +478,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.9</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.10</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.9"></script>
+<script type="module" src="src/app.js?v=2026-10-26.10"></script>
 </body>
 </html>

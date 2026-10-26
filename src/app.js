@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.9";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.9";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.9";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.9";
-import { setupTabs } from "./tabs.js?v=2026-10-26.9";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.10";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.10";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.10";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.10";
+import { setupTabs } from "./tabs.js?v=2026-10-26.10";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.9";
+const VERSION = "2026-10-26.10";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
+// Both tabs use the same package-details markup and data; disclosure state stays local to each tab.
+for (const prefix of ["", "analysis-"]) {
+  const content = $("package-details-template").content.cloneNode(true);
+  for (const node of content.querySelectorAll("[id]")) node.id = prefix + node.id;
+  $(prefix + "fileinfo").prepend(content);
+}
 const updateFlashView = setupFlashView();
 const updateTabs = setupTabs();
 
@@ -138,7 +144,7 @@ const items = (list) => list.map((c) => {
 // The facts about the device are frozen when an install starts: the device is not the one it was afterwards
 // (it restarts as the new firmware), and the route must keep saying what was true at the start.
 function renderRoute() {
-  $("route-file").replaceChildren(...items(fileChecks(state.pkg)));
+  for (const prefix of ["", "analysis-"]) $(prefix + "route-file").replaceChildren(...items(fileChecks(state.pkg)));
   $("route-dev").replaceChildren(...items(state.frozen || devChecks(selectedDevice(), state.pkg)));
   const evs = items(state.events), last = evs[evs.length - 1];
   if (last && state.busy && state.progress) {
@@ -184,16 +190,18 @@ async function loadFile(file, source = "", ticket = ++fileEpoch) {
     if (source) provenance(pkg, source);
     if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
     if (pkg.kind === "stock" || (pkg.kind === "mvave" && !state.stock)) state.stock = pkg;
-    $("f-name").textContent = file.name;
-    $("f-source").textContent = source; $("f-source").hidden = $("f-source-t").hidden = !source;
-    $("f-id").textContent = pkg.product;
-    $("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
-    $("f-sha").replaceChildren(...pkg.sha256.match(/.{1,8}/g).map((g) => make("span", { textContent: g })));
-    $("f-kind").textContent = kindText[pkg.kind];
-    $("f-kind").className = unverified(pkg) ? "warn" : "";
-    $("f-loader").textContent = loaderText[pkg.loader];
+    for (const prefix of ["", "analysis-"]) {
+      const field = (id) => $(prefix + id);
+      field("f-name").textContent = file.name;
+      field("f-source").textContent = source; field("f-source").hidden = field("f-source-t").hidden = !source;
+      field("f-id").textContent = pkg.product;
+      field("f-size").textContent = `${(pkg.size / 1024).toFixed(0)} KiB`;
+      field("f-sha").replaceChildren(...pkg.sha256.match(/.{1,8}/g).map((g) => make("span", { textContent: g })));
+      field("f-kind").textContent = kindText[pkg.kind];
+      field("f-kind").className = unverified(pkg) ? "warn" : "";
+      field("f-loader").textContent = loaderText[pkg.loader];
+    }
     $("trust-row").hidden = !unverified(pkg); $("trust").checked = false;
-    $("fileinfo").hidden = false;
     $("file-selection").textContent = `${pkg.product} · ${file.name}`;
     msg.textContent = "Ready for Flash and Layout Analysis.";
     say("");
@@ -706,10 +714,13 @@ function refresh() {
     $("wipe-pick").hidden = !!state.stock;
   }
   $("rescan").disabled = state.busy || !state.up;
-  $("connect-row").hidden = !pkg || !!state.access;
+  $("connect-row").hidden = !!state.access;
   $("firmware-inputs").disabled = state.busy;
   $("file").disabled = state.busy;
-  $("connect").disabled = state.fileLoading;
+  $("connect").disabled = !pkg || state.fileLoading || state.busy;
+  $("connect-hint").textContent = state.fileLoading ? "Wait for the firmware file to finish loading." : !pkg ? "Load a firmware file first." : "Next: this page checks the FM-1 against the file.";
+  $("firmware-loaded").hidden = !pkg;
+  $("fileinfo").hidden = $("analysis-fileinfo").hidden = !pkg;
   $("flash-selection").textContent = pkg ? `Selected firmware: ${pkg.name} · ${pkg.product}` : "Choose firmware in the shared Firmware file panel to begin.";
 
   $("restore").hidden = !(state.refusedStartup && pkg && dev && !state.done);

@@ -44,7 +44,10 @@ try {
     for (const mode of ['flash', 'advanced', 'recovery', 'about']) {
       await page.locator('#tab-' + mode).click();
       assert.equal(await page.locator('#st-file').isVisible(), true, 'shared picker visible on ' + mode);
-      assert.equal(await page.locator('#connect').isVisible(), false, 'no device connection before a package is selected');
+      assert.equal(await page.locator('#connect').isVisible(), mode === 'flash', 'connection step is visible only on Flash');
+      assert.equal(await page.locator('#connect').isDisabled(), true, 'connection requires a loaded package');
+      assert.equal(await page.locator('#firmware-loaded').isVisible(), false);
+      assert.equal(await page.locator('.package-details:visible').count(), 0);
       const flow = mode === 'flash' ? page.locator('#st-map .workflow') : mode === 'advanced' ? page.locator('.analysis-workflow') : null;
       if (flow) assert.equal(await flow.locator(':scope > li').count(), 4);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, mode + ' overflow at ' + width);
@@ -87,6 +90,12 @@ try {
   await page.keyboard.press('Home');
   assert.equal(await page.locator('#tab-flash').getAttribute('aria-selected'), 'true');
   assert.equal(await page.locator('[role="tabpanel"]:visible').count(), 1);
+  await page.locator('#connect').evaluate(e => e.dispatchEvent(new MouseEvent('click', {bubbles:true})));
+  assert.equal(await page.evaluate(() => window.midiCalls), 0, 'connection handler also enforces firmware prerequisite');
+  await page.locator('#file').setInputFiles({name:'invalid.fwsc',mimeType:'application/octet-stream',buffer:Buffer.alloc(3)});
+  await page.waitForFunction(() => document.querySelector('#file-msg').classList.contains('err'));
+  assert.equal(await page.locator('#connect').isDisabled(), true, 'invalid initial file does not unlock connection');
+  assert.equal(await page.locator('#firmware-loaded').isVisible(), false);
   await page.screenshot({ path: "/tmp/flash-tabs-default.png" });
   await page.locator("#tab-flash").focus(); await page.keyboard.press("ArrowRight");
   assert.equal(await page.locator("#tab-advanced").getAttribute("aria-selected"), "true");
@@ -108,6 +117,18 @@ try {
   await page.locator('#file').setInputFiles(nextPath);
   await page.waitForFunction(() => document.querySelector('#analysis-source').textContent.includes('FM-1_016'));
   assert.equal(await page.locator('#f-id').textContent(), 'FM-1_016', 'analysis uses shared firmware');
+  assert.equal(await page.locator('#firmware-loaded').isVisible(), true);
+  assert.equal(await page.locator('#analysis-fileinfo').isVisible(), true);
+  assert.equal(await page.locator('#st-file #file-details').count(), 0);
+  await page.locator('#analysis-file-details > summary').click();
+  assert.equal(await page.locator('#analysis-f-id').innerText(), 'FM-1_016');
+  assert.equal(await page.locator('#analysis-file-details').textContent(), await page.locator('#file-details').textContent(), 'both tabs show identical facts and checks');
+  await page.locator('#analysis-file-details > summary').click();
+  await page.locator('#tab-flash').click();
+  assert.equal(await page.locator('#fileinfo').isVisible(), true);
+  assert.equal(await page.locator('#connect').isEnabled(), true);
+  assert.equal(await page.locator('#fileinfo').evaluate(e => e.nextElementSibling.id), 'st-start');
+  await page.locator('#tab-advanced').click();
   assert.equal(await page.evaluate(() => window.midiCalls), 0);
   await page.locator('#flash-details > summary').click();
   assert.match(await page.locator('#flash-layout').innerText(), /V16-style/);
@@ -125,6 +146,8 @@ try {
   assert.equal(await page.locator('#file-msg').isVisible(), true);
   assert.match(await page.locator('#analysis-source').innerText(), /FM-1_015/);
   assert.equal(await page.locator('#f-id').textContent(), 'FM-1_015', 'invalid replacement preserves shared selection');
+  assert.equal(await page.locator('#analysis-f-id').textContent(), 'FM-1_015');
+  assert.equal(await page.locator('#firmware-loaded').isVisible(), true);
   await page.locator('#file').setInputFiles(nextPath);
   await page.waitForFunction(() => document.querySelector('#analysis-source').textContent.includes('FM-1_016'));
   assert.equal(await page.evaluate(() => window.midiCalls), 0);

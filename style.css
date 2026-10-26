@@ -328,9 +328,14 @@ dialog h3 { margin-top: 0; }
 #firmware-inputs { min-width: 0; margin: 0; padding: 0; border: 0; }
 #firmware-inputs:disabled #drop { cursor: not-allowed; }
 #file-msg { margin: 12px 0 0; overflow-wrap: anywhere; }
-.selected-file { margin: 12px 0 0; font-weight: 600; overflow-wrap: anywhere; }
-#file-details .cp { grid-template-columns: 1fr; gap: 6px; }
-#file-details .plate { justify-self: start; padding-inline: 8px; }
+.firmware-loaded { display: flex; align-items: center; gap: 14px; border: 2px solid var(--go); padding: 14px; margin: 18px 0; }
+.firmware-loaded svg { flex: 0 0 36px; width: 36px; height: 36px; fill: none; stroke: var(--go); stroke-width: 2.5; }
+.firmware-loaded > div { min-width: 0; }
+.firmware-loaded strong { display: block; color: var(--go); font: 700 1.6rem/1.15 var(--head); }
+.selected-file { margin: 6px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.package-details > details { margin-top: 0; }
+.package-details > details > summary { font: 700 1.6rem/1.2 var(--head); }
+.package-details dd { overflow-wrap: anywhere; }
 #flash-selection { overflow-wrap: anywhere; }
 #st-start #status:empty { display: none; }
 @media (max-width: 900px) {
