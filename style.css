@@ -327,6 +327,7 @@ dialog h3 { margin-top: 0; }
 .workspace-top > .stage { margin-top: 0; }
 #firmware-inputs { min-width: 0; margin: 0; padding: 0; border: 0; }
 #firmware-inputs:disabled #drop { cursor: not-allowed; }
+#st-file.over { outline: 3px solid var(--orange); outline-offset: 3px; }
 #file-msg { margin: 12px 0 0; overflow-wrap: anywhere; }
 .firmware-loaded { display: flex; align-items: center; gap: 14px; border: 2px solid var(--go); padding: 14px; margin: 18px 0; }
 .firmware-loaded svg { flex: 0 0 36px; width: 36px; height: 36px; fill: none; stroke: var(--go); stroke-width: 2.5; }

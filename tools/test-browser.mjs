@@ -16,7 +16,7 @@ const backup = Buffer.alloc(FLASH_SIZE, 255); backup.set(packageFlash(old));
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+  const errors = [], downloads = []; page.on("pageerror", (e) => errors.push(e.message)); page.on("download", d => downloads.push(d.suggestedFilename()));
   // Only this in-memory MIDI device exists in the test browser. No hardware access.
   await page.addInitScript(() => {
     window.midiCalls = 0;
@@ -116,6 +116,41 @@ try {
   assert.match(await page.locator("#backup-msg").innerText(), /V15-style/);
   assert.equal(await page.locator('#st-file').evaluate(e => e.closest('[role="tabpanel"]')), null);
   assert.equal(await page.locator('#analysis-file').count(), 0);
+  // Exercise the chooser opened by a click, not only direct input assignment.
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.locator('#drop').click();
+  await (await chooserPromise).setFiles(oldPath);
+  await page.waitForFunction(() => document.querySelector('#file-selection').textContent.includes('FM-1_015'));
+  // A file may land anywhere in the shared panel, including the new loaded sign.
+  for (const selector of ['#drop', '#firmware-title', '#firmware-loaded', '#url']) {
+    const cancelled = await page.evaluate(({selector,bytes}) => {
+      const transfer = new DataTransfer(); transfer.items.add(new File([new Uint8Array(bytes)], 'dropped.fwsc'));
+      const target = document.querySelector(selector);
+      const over = new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer});
+      target.dispatchEvent(over);
+      const event = new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer});
+      target.dispatchEvent(event);
+      return over.defaultPrevented && event.defaultPrevented;
+    }, {selector,bytes:[...readFileSync(nextPath)]});
+    assert.equal(cancelled,true,'drop must not navigate/download at '+selector);
+    await page.waitForFunction(() => document.querySelector('#file-selection').textContent.includes('dropped.fwsc') && document.querySelector('#file-msg').textContent.startsWith('Ready'));
+    await page.locator('#file').setInputFiles(oldPath);
+    await page.waitForFunction(() => document.querySelector('#f-id').textContent === 'FM-1_015');
+  }
+  const outsideCancelled = await page.evaluate(() => {
+    const transfer=new DataTransfer();transfer.items.add(new File(['invalid'],'missed.fwsc'));
+    const event=new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer});
+    document.querySelector('#workflow-title').dispatchEvent(event);return event.defaultPrevented;
+  });
+  assert.equal(outsideCancelled,true,'missed drops cannot navigate/download');
+  assert.equal(await page.locator('#f-id').textContent(),'FM-1_015','missed drop preserves loaded firmware');
+  assert.match(await page.locator('#file-msg').textContent(), /Drop firmware in the Firmware file panel/);
+  assert.equal(await page.evaluate(() => {
+    const transfer=new DataTransfer();transfer.items.add(new File(['x'],'backup.bin'));
+    const event=new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer});
+    document.querySelector('#backup-file').dispatchEvent(event);return event.defaultPrevented;
+  }),false,'other native file inputs retain their default drop behavior');
+  assert.deepEqual(downloads, [], 'local file selection must not download anything');
   await page.locator('#file').setInputFiles(nextPath);
   await page.waitForFunction(() => document.querySelector('#analysis-source').textContent.includes('FM-1_016'));
   assert.equal(await page.locator('#f-id').textContent(), 'FM-1_016', 'analysis uses shared firmware');

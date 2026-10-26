@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.11";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.11";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.11";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.11";
-import { setupTabs } from "./tabs.js?v=2026-10-26.11";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.12";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.12";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.12";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.12";
+import { setupTabs } from "./tabs.js?v=2026-10-26.12";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.11";
+const VERSION = "2026-10-26.12";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -475,10 +475,36 @@ function showList(urls, downloadOnly = [], ticket = fileEpoch) {
   draw();
   urlMsg(urls.length ? `${urls.length + downloadOnly.length} firmware files found. Pick one:` : `${downloadOnly.length} firmware files found, none that a web page can read. Download one and drop it in the box above:`);
 }
-const drop = $("drop");
-for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
-for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });
-drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) pickFile(e.dataTransfer.files[0]); });
+// The whole shared panel accepts files, including its heading and loaded-file sign.
+const drop = $("st-file");
+const carriesFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => {
+  if (!carriesFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = state.busy ? "none" : "copy";
+  if (!state.busy) drop.classList.add("over");
+});
+drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); });
+drop.addEventListener("drop", (e) => {
+  drop.classList.remove("over");
+  if (!carriesFiles(e)) return;
+  e.preventDefault(); e.stopPropagation();
+  const file = e.dataTransfer.files[0];
+  if (file) pickFile(file);
+});
+// A missed drop must not navigate away or download the local file. Keep native
+// file inputs elsewhere (backup, donor, official package) working normally.
+for (const ev of ["dragover", "drop"]) document.addEventListener(ev, (e) => {
+  if (!carriesFiles(e) || e.target instanceof HTMLInputElement && e.target.type === "file" && !e.target.disabled) return;
+  e.preventDefault();
+  if (ev === "drop") {
+    drop.classList.remove("over");
+    if (!state.busy) {
+      $("file-msg").className = "small err";
+      $("file-msg").textContent = "Drop firmware in the Firmware file panel, or click its file picker. Your selection has not changed.";
+    }
+  }
+});
 $("trust").addEventListener("change", refresh);
 
 // -------------------------------------------------------------- port names ---

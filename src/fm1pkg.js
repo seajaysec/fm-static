@@ -6,7 +6,7 @@
 // The header is a CRC-16/XMODEM stream, key 0xFFFF, which that reader names and
 // which undoes itself. Nothing in this file is taken from another implementation.
 
-import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-26.11";
+import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-26.12";
 
 export { productOf, logicalImage };
 
