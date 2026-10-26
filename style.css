@@ -198,6 +198,6 @@ dialog h3 { margin-top: 0; }
 .tabs button[aria-selected="true"] { border-bottom-color: var(--orange); font-weight: 700; }
 .plainpick { display: block; margin: 8px 0; }
 #bk-verdict p { margin: 6px 0; }
-.bk-yes, .bk-likely { border-left: 4px solid var(--go); padding-left: 10px; }
-.bk-maybe, .bk-unlikely { border-left: 4px solid var(--orange); padding-left: 10px; }
-.bk-no { border-left: 4px solid var(--stop); padding-left: 10px; }
+.bk-yes, .bk-likely { border: 1px solid var(--go); padding: 8px 10px; }
+.bk-maybe, .bk-unlikely { border: 1px solid var(--orange); padding: 8px 10px; }
+.bk-no { border: 1px solid var(--stop); padding: 8px 10px; }
