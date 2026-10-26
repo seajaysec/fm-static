@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.34";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.34";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-25.34";
-import { knownFirmware, protocolFor, FAMILY_NAME, WHERE, backupName, parseBackupName, verdict } from "./backup.js?v=2026-10-25.34";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-25.35";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-25.35";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-25.35";
+import { knownFirmware, protocolFor, FAMILY_NAME, WHERE, backupName, parseBackupName, verdict } from "./backup.js?v=2026-10-25.35";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-25.34";
+const VERSION = "2026-10-25.35";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -486,7 +486,7 @@ async function connect() {
   applyNames();
   let t = null;
   state.access.onstatechange = () => { clearTimeout(t); t = setTimeout(() => { if (!state.busy) scan(); }, 700); };
-  $("connect-row").hidden = true;
+  $("connect-row").hidden = true; $("top-connect").hidden = true; $("tabs").hidden = false;
   $("st-dev").hidden = false;
   await scan();
 }
@@ -792,13 +792,12 @@ function showTab(which) {
 $("tab-install-b").addEventListener("click", () => showTab("install"));
 $("tab-backup-b").addEventListener("click", () => showTab("backup"));
 
-$("bk-connect-go").addEventListener("click", async () => { await connect(); renderBackup(); });
+$("connect-top").addEventListener("click", connect);
 
 function renderBackup() {
   if ($("tab-backup").hidden) return;
-  const connected = !!state.up;
-  $("bk-connect").hidden = connected; $("bk-body").hidden = !connected;
-  if (!connected) return;
+  $("bk-body").hidden = !state.up;
+  if (!state.up) return;
   const dev = selectedDevice();
   const route = $("bk-route"); route.replaceChildren();
   const row = (st, plate, title, text) => {

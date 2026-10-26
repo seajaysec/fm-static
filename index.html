@@ -30,7 +30,8 @@
     </details>
   </section>
 
-  <nav class="tabs" role="tablist" aria-label="What to do">
+  <p id="top-connect" class="next"><button id="connect-top">Connect FM-1</button> <span class="small">Install firmware, or back up and restore what it keeps. Asks the browser for MIDI access.</span></p>
+  <nav id="tabs" class="tabs" hidden role="tablist" aria-label="What to do">
     <button id="tab-install-b" role="tab" aria-selected="true" aria-controls="tab-install">Install firmware</button>
     <button id="tab-backup-b" role="tab" aria-selected="false" aria-controls="tab-backup">Back up &amp; restore</button>
   </nav>
@@ -206,7 +207,6 @@
     <section class="stage" id="st-backup" data-state="now">
       <h2>Back up &amp; restore</h2>
       <p class="lead dim">Separate from installing: do it before, after, or on its own. A backup is what the firmware on the FM-1 keeps (projects, presets, banks), not a copy of the firmware itself.</p>
-      <p id="bk-connect" class="next"><button id="bk-connect-go">Connect FM-1</button> <span class="small">Asks the browser for MIDI access, the same as Install.</span></p>
       <div id="bk-body" hidden>
         <ol id="bk-route" class="route"></ol>
         <div id="bk-actions" hidden>
@@ -225,8 +225,8 @@
   </div>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software under the <a href="LICENSE">GPL-3.0</a>; <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-25.34</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-25.35</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-25.34"></script>
+<script type="module" src="src/app.js?v=2026-10-25.35"></script>
 </body>
 </html>
