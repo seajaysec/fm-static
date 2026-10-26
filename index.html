@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.10">
+<link rel="stylesheet" href="style.css?v=2026-10-26.11">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -92,20 +92,31 @@
   <section class="stage" id="st-dev" hidden>
     <h2>Your FM-1</h2>
     <div id="devices">
+      <p id="scan-status" class="small" role="status"></p>
       <div id="device-list"></div>
       <p id="none" class="dim" hidden>Nothing answered under a usual FM-1 port name. Pick your FM-1 in the port list below. If your FM-1 runs m-bootloader, holding REC while you switch it on forces update mode, and PLAY opens its recovery menu.</p>
       <details>
-        <summary>MIDI ports and names</summary>
-        <p class="small">Every port your computer sees. Ports with a usual FM-1 name are asked who they are automatically; any other port is sent nothing until you press <b>Try</b> on it. On a Mac a port can keep the name of another device last plugged into that USB socket (Audio MIDI Setup, Window, Show MIDI Studio, renames it).</p>
+        <summary>Available MIDI ports</summary>
+        <p class="small">These input/output ports are reported as available by your browser. A port can belong to software or a MIDI interface; its name alone does not prove a physical FM-1 is connected. Usual FM-1 names are checked automatically. Other ports are sent nothing until you choose <b>Check this port</b>.</p>
         <ul id="ports" class="plain"></ul>
-        <p id="ports-empty" class="small dim" hidden>No other ports. If your FM-1 is missing, check the USB cable: it must carry data.</p>
-        <p class="small">A port with one of these in its name is found automatically. Add the name your FM-1 shows up under; it is kept in this browser.</p>
+        <p id="ports-empty" class="small dim" hidden>No other available input/output pairs. If your FM-1 is missing, check power and use a USB cable that carries data.</p>
+        <details>
+        <summary>Automatic name matching</summary>
+        <p class="small">These are matching rules, not connected devices. A port containing one of these names is checked automatically. Only names you add here are saved in this browser.</p>
+        <p class="small">On a Mac, Audio MIDI Setup can retain an earlier device name. Check Window → Show MIDI Studio if a port name looks wrong.</p>
         <ul id="presets" class="chips" aria-label="Built-in names"></ul>
         <ul id="custom" class="chips" aria-label="Your names"></ul>
         <form id="add-name"><input id="new-name" placeholder="the name your FM-1 shows up under" aria-label="New port name"><button class="small" type="submit">Add name</button></form>
+        </details>
       </details>
-      <p class="after"><button id="rescan" class="small">Rescan</button>
-        <button id="boot-check" class="small" hidden>Nothing shows up: is it in boot mode?</button></p>
+      <p class="small">MIDI permission is already granted for this session. Your browser may remember it and skip the prompt next time; the port list is checked again.</p>
+      <p class="after"><button id="rescan" class="small">Refresh devices</button></p>
+      <details id="boot-help" hidden>
+        <summary>FM-1 still missing? Check USB recovery mode</summary>
+        <p class="after">If normal firmware cannot start, the FM-1 may appear as a USB recovery device instead of a MIDI instrument. This is the chip’s built-in ROM download mode, sometimes called “boot mode”; it is different from the MIDI update mode used while flashing.</p>
+        <p class="small">This check opens a USB device picker and only identifies the selected device. It does not switch modes or write firmware. A missing MIDI port alone does not mean the FM-1 needs recovery.</p>
+        <button id="boot-check" class="small">Check for a USB recovery device</button>
+      </details>
       <div id="boot-msg" hidden></div>
       <ol id="route-dev" class="route"></ol>
       <ol id="route-opts" class="route">
@@ -478,8 +489,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.10</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.11</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.10"></script>
+<script type="module" src="src/app.js?v=2026-10-26.11"></script>
 </body>
 </html>

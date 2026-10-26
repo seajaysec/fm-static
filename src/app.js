@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.10";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.10";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.10";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.10";
-import { setupTabs } from "./tabs.js?v=2026-10-26.10";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.11";
+import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.11";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.11";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.11";
+import { setupTabs } from "./tabs.js?v=2026-10-26.11";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.10";
+const VERSION = "2026-10-26.11";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -522,6 +522,24 @@ renderNames();
 
 // ------------------------------------------------------------------ device ---
 
+let scanAgain = false, portRevision = 0, portSnapshot = "", portTimer;
+// Opening a port also fires statechange; only availability/identity changes need another scan.
+function portSignature() {
+  return JSON.stringify([state.access.inputs, state.access.outputs].map((ports) =>
+    [...ports].filter(([, p]) => p.state !== "disconnected").map(([key, p]) => [key, p.id, p.name]).sort()));
+}
+function portsChanged() {
+  const signature = portSignature();
+  if (signature === portSnapshot) return;
+  portSnapshot = signature; portRevision++;
+  if (state.busy) return; // The installer owns MIDI while writing and rescans afterwards.
+  state.devices = []; state.tried.clear(); scanAgain = true;
+  $("scan-status").textContent = "MIDI ports changed. Checking again…";
+  renderDevices(); refresh();
+  clearTimeout(portTimer);
+  if (!state.scanning) portTimer = setTimeout(scan, 150);
+}
+
 async function connect() {
   if (state.busy || state.fileLoading || !state.pkg) return;
   if (!navigator.requestMIDIAccess) {
@@ -536,25 +554,37 @@ async function connect() {
   }
   state.up = new Updater(state.access, log);
   applyNames();
-  let t = null;
-  state.access.onstatechange = () => { clearTimeout(t); t = setTimeout(() => { if (!state.busy) scan(); }, 700); };
+  portSnapshot = portSignature();
+  state.access.onstatechange = portsChanged;
   $("connect-row").hidden = true;
   $("st-dev").hidden = false;
   await scan();
 }
 
 async function scan() {
-  if (!state.up || state.scanning || state.busy) return;
-  state.scanning = true;
-  try {
-    const found = await state.up.scan();
-    const keep = state.devices.filter((d) => d.manual && state.up.ports().includes(d.name) && !found.some((f) => f.name === d.name));
-    const alive = [];
-    for (const d of keep) { const r = await state.up.probe(d.name); if (r) alive.push({ ...r, manual: true }); }
-    state.devices = [...found, ...alive];
-    if (!state.devices.some((d) => d.name === state.selected)) state.selected = state.devices[0]?.name ?? null;
-    renderDevices();
-  } finally { state.scanning = false; refresh(); }
+  if (!state.up || state.busy) return;
+  if (state.scanning) { scanAgain = true; return; }
+  clearTimeout(portTimer);
+  do {
+    scanAgain = false; state.scanning = true;
+    const revision = portRevision;
+    state.devices = []; state.tried.clear();
+    $("scan-status").className = "small";
+    $("scan-status").textContent = "Checking available MIDI ports for an FM-1…";
+    renderDevices(); refresh();
+    try {
+      const found = await state.up.scan();
+      if (revision !== portRevision) { scanAgain = true; continue; }
+      const ports = state.up.ports();
+      state.devices = found.filter((d) => ports.includes(d.name)).map((d) => ({ ...d, manual: state.up.allowed.has(d.name) }));
+      if (!state.devices.some((d) => d.name === state.selected)) state.selected = state.devices[0]?.name ?? null;
+      for (const name of ports) if (state.up.isKnown(name) && !state.devices.some((d) => d.name === name)) state.tried.set(name, "No FM-1 reply this scan");
+      $("scan-status").textContent = `Checked at ${new Date().toLocaleTimeString()}: ${ports.length} available MIDI input/output ${ports.length === 1 ? "pair" : "pairs"}; ${state.devices.length} ${state.devices.length === 1 ? "device replied" : "devices replied"}.`;
+    } catch (e) {
+      $("scan-status").className = "small err";
+      $("scan-status").textContent = `Could not finish checking MIDI ports: ${e.message}. Press Refresh devices to try again.`;
+    } finally { state.scanning = false; renderDevices(); refresh(); }
+  } while (scanAgain && !state.busy);
 }
 
 function renderDevices() {
@@ -573,14 +603,16 @@ function renderDevices() {
     }
     list.append(make("label", { className: "dev" + (d.name === state.selected ? " sel" : "") }, ...parts));
   }
-  $("none").hidden = state.devices.length > 0;
+  $("none").hidden = state.scanning || scanAgain || state.devices.length > 0;
 
-  // every MIDI port, always: this is the picker
+  // Available input/output pairs are candidates, not proof of an attached FM-1.
   const rows = state.up.ports().filter((n) => !state.devices.some((d) => d.name === n)).map((n) => {
     const answered = state.tried.get(n);
-    const b = make("button", { className: "small", textContent: answered ? "Try again" : "Try this port" });
+    const b = make("button", { className: "small", textContent: answered ? "Check again" : "Check this port", disabled: state.scanning || scanAgain || state.busy });
     b.addEventListener("click", () => tryPort(n, b));
-    const note = answered || (state.up.isKnown(n) ? "usual name, no answer" : "not probed");
+    const note = answered || (state.up.isKnown(n)
+      ? state.scanning || scanAgain ? "Checking for an FM-1 reply…" : "Not checked; refresh devices"
+      : "Available MIDI port · not checked for an FM-1");
     return make("li", {}, make("span", { className: "dname", textContent: n }), make("span", { className: "meta", textContent: note }), b);
   });
   $("ports").replaceChildren(...rows);
@@ -589,28 +621,32 @@ function renderDevices() {
 
 // the user says this port is the FM-1: only then is it sent anything
 async function tryPort(name, button) {
+  if (state.busy || state.scanning || scanAgain) return;
   button.disabled = true;
   state.up.allow(name);
-  const r = await state.up.probe(name);
-  if (!r) { state.tried.set(name, "no answer"); renderDevices(); return; }
-  state.tried.delete(name);
-  state.devices.push({ ...r, manual: true });
   state.selected = name;
-  renderDevices();
-  refresh();
+  await scan();
 }
+
+// Recheck when returning to the page, without requesting permission again.
+window.addEventListener("focus", () => {
+  if (state.access && !state.busy && !document.hidden) scan();
+});
+document.addEventListener("visibilitychange", () => {
+  if (state.access && !state.busy && !document.hidden) scan();
+});
 
 // ------------------------------------------------------------- boot mode ---
 // A FM-1 whose firmware does not start falls back to the chip's ROM boot mode (WL80UBOOT, USB vendor 4C4A): not a MIDI
 // device, so Web MIDI never sees it; WebUSB can list it (nothing is opened or sent).
-if (navigator.usb) $("boot-check").hidden = false;
+if (navigator.usb) $("boot-help").hidden = false;
 $("boot-check").addEventListener("click", async () => {
   const box = $("boot-msg");
   box.replaceChildren();
   let dev = null;
   try { dev = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x4C4A }] }); } catch (e) { log(`usb: ${e.name}`); }
   const link = (href, text) => make("a", { href, textContent: text, rel: "noopener", target: href.startsWith("#") ? "_self" : "_blank" });
-  if (!dev) box.append(make("p", { className: "small", textContent: "No boot-mode device was found or chosen. Replug the FM-1 with a USB data cable straight into the computer and try again." }));
+  if (!dev) box.append(make("p", { className: "small", textContent: "No USB recovery device was chosen. If the picker was empty, check power and use a USB data cable straight into the computer. This alone does not tell us why MIDI is missing." }));
   else box.append(
     make("p", { className: "warn", textContent: `Selected JieLi USB device: ${dev.productName || "unknown name"}, ${dev.vendorId.toString(16)}:${dev.productId.toString(16)}. ${dev.productId === 0x8057 ? "This ID is used by the FM-1's ROM download mode; it is not a MIDI update port." : "This product ID is not the expected FM-1 ROM download ID (8057)."} USB identification alone does not prove which model is attached or why it entered this mode.` }),
     make("p", {}, "This page cannot flash through ROM download mode. For an FM-1 in that mode, use ",
@@ -694,7 +730,8 @@ function refresh() {
   const resume = dev && IS_OTA(dev.id);
   const model = dev && (resume ? dev.id.model.replace(/^ota-/i, "") : dev.id.model);
   let why = "";
-  if (state.fileLoading) why = "Reading the firmware file.";
+  if (state.scanning || scanAgain) why = "Checking the current MIDI devices.";
+  else if (state.fileLoading) why = "Reading the firmware file.";
   else if (!pkg) why = "Choose firmware in the shared Firmware file panel.";
   else if (!state.access) why = "Waiting for your FM-1: press Connect above.";
   else if (!dev) why = "Waiting for an FM-1 to be selected above.";
@@ -713,7 +750,8 @@ function refresh() {
       : "Needs the official V15 package: M-VAVE's loader and the startup code it writes come from it.";
     $("wipe-pick").hidden = !!state.stock;
   }
-  $("rescan").disabled = state.busy || !state.up;
+  $("rescan").disabled = state.busy || state.scanning || scanAgain || !state.up;
+  $("rescan").textContent = state.scanning || scanAgain ? "Checking devices…" : "Refresh devices";
   $("connect-row").hidden = !!state.access;
   $("firmware-inputs").disabled = state.busy;
   $("file").disabled = state.busy;
@@ -733,7 +771,7 @@ function refresh() {
     : "Needed: a package of the firmware your FM-1 runs now, for its startup code. This is in addition to the file you chose, which is what gets written.";
   $("donor-info").className = "small" + (src ? "" : " warn");
   $("donor-open").textContent = src ? "Use a different file for the startup code" : "Choose the file for the startup code";
-  $("restore-go").disabled = state.busy || state.fileLoading || !src || !$("risk").checked;
+  $("restore-go").disabled = state.busy || state.scanning || scanAgain || state.fileLoading || !src || !$("risk").checked;
 
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
@@ -754,7 +792,7 @@ async function bootPackage() {
 
 async function install(startup = null) {
   const dev = selectedDevice(), pkg = state.pkg;
-  if (!dev || !pkg || state.busy || state.fileLoading) return;
+  if (!dev || !pkg || state.busy || state.scanning || scanAgain || state.fileLoading) return;
   const resume = IS_OTA(dev.id);
   state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();

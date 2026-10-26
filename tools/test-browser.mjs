@@ -30,7 +30,9 @@ try {
       if (bits) packed.push(acc & 127);
       setTimeout(() => input.onmidimessage?.({ data: [240, ...packed, 247] }), 0);
     } };
-    Object.defineProperty(navigator, "requestMIDIAccess", { value: async () => { window.midiCalls++; return { inputs: new Map([[0, input]]), outputs: new Map([[0, output]]), addEventListener() {} }; } });
+    window.midiAccess = { inputs: new Map([[0, input]]), outputs: new Map([[0, output]]), addEventListener() {} };
+    window.midiInput = input; window.midiOutput = output;
+    Object.defineProperty(navigator, "requestMIDIAccess", { value: async () => { window.midiCalls++; return window.midiAccess; } });
     window.usbPickedPID = 0x8057;
     Object.defineProperty(navigator, "usb", { value: { requestDevice: async () => ({ vendorId: 0x4c4a, productId: window.usbPickedPID, productName: "WL82 UBOOT1.00" }) } });
   });
@@ -211,6 +213,7 @@ try {
   await page.locator('#tab-flash').click();
   await page.locator("#trust").check(); await page.locator("#connect").click();
   await page.locator("#wipe").waitFor({ state: "visible" });
+  await page.locator("#boot-help").evaluate(e => e.open = true);
   await page.locator("#boot-check").click();
   assert.match(await page.locator("#boot-msg").innerText(), /M-Flasher/);
   assert.equal(await page.locator('#boot-msg a[href^="https://"]').getAttribute("target"), "_blank");
@@ -279,6 +282,67 @@ try {
   await page.locator('#tab-about').click();
   await page.locator('#feature-comparison').evaluate(e => e.scrollIntoView());
   await page.screenshot({ path: '/tmp/fm-static-about-mobile-dark.png' });
+  // Port availability changes during a scan must invalidate old replies and queue a fresh scan.
+  await page.locator('#tab-flash').click();
+  await page.evaluate(async () => {
+    const url = new URL('src/updater.js', location.href); url.search = new URL(document.querySelector('script[type="module"]').src).search;
+    const {Updater} = await import(url.href);
+    window.scanCount = 0;
+    Updater.prototype.scan = async function() {
+      window.scanCount++;
+      const found = this.ports().filter(n => n === 'FM-1').map(name => ({name,id:{text:'FM-1_900',model:'FM-1',version:900}}));
+      if(window.holdScan) { window.holdScan = false; await new Promise(resolve => window.finishScan = resolve); }
+      return found;
+    };
+    window.holdScan = true;
+  });
+  await page.locator('#rescan').click();
+  await page.waitForFunction(() => typeof window.finishScan === 'function');
+  assert.equal(await page.locator('#device-list input').count(), 0, 'old replies disappear while checking');
+  assert.equal(await page.locator('#install-row').isVisible(), false, 'no install using an old scan');
+  await page.evaluate(() => {
+    window.midiInput.state = window.midiOutput.state = 'disconnected';
+    window.midiAccess.onstatechange({port:window.midiInput});
+    window.finishScan();
+  });
+  await page.waitForFunction(() => window.scanCount >= 2 && document.querySelector('#scan-status').textContent.includes('0 available'));
+  assert.equal(await page.locator('#device-list input').count(), 0, 'late old reply is discarded');
+  assert.equal(await page.locator('#ports li').count(), 0, 'disconnected ports excluded');
+  await page.evaluate(() => {
+    window.midiInput.state = window.midiOutput.state = 'connected';
+    const candidate = {name:'Virtual MIDI',state:'connected',open:async()=>{}};
+    window.midiAccess.inputs.set(1,candidate);
+    window.midiAccess.outputs.set(1,{...candidate,send:()=>{throw Error('Unrequested probe');}});
+    window.midiAccess.onstatechange({port:window.midiInput});
+  });
+  await page.waitForFunction(() => document.querySelector('#scan-status').textContent.includes('2 available') && document.querySelector('#device-list input'));
+  assert.match(await page.locator('#ports').textContent(), /Available MIDI port · not checked for an FM-1/);
+  const scans = await page.evaluate(() => window.scanCount);
+  await page.evaluate(() => window.midiAccess.onstatechange({port:window.midiInput}));
+  await page.waitForTimeout(250);
+  assert.equal(await page.evaluate(() => window.scanCount), scans, 'opening a port does not start an endless rescan');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(previous => window.scanCount > previous && document.querySelector('#scan-status').textContent.startsWith('Checked'), scans);
+  assert.equal(await page.evaluate(() => window.midiCalls), 1, 'fresh scan reuses permission');
+  await page.evaluate(async () => {
+    const url=new URL('src/updater.js',location.href);url.search=new URL(document.querySelector('script[type="module"]').src).search;
+    const {Updater}=await import(url.href);window.goodScan=Updater.prototype.scan;
+    Updater.prototype.scan=async()=>{throw Error('Port unavailable');};
+  });
+  await page.locator('#rescan').click();
+  await page.waitForFunction(()=>document.querySelector('#scan-status').classList.contains('err'));
+  assert.match(await page.locator('#ports').textContent(), /Not checked; refresh devices/);
+  assert.doesNotMatch(await page.locator('#ports').textContent(), /Checking for an FM-1 reply/);
+  await page.evaluate(async () => {
+    const url=new URL('src/updater.js',location.href);url.search=new URL(document.querySelector('script[type="module"]').src).search;
+    (await import(url.href)).Updater.prototype.scan=window.goodScan;
+  });
+  await page.locator('#rescan').click();
+  await page.waitForFunction(()=>document.querySelector('#scan-status').textContent.startsWith('Checked'));
+  await page.setViewportSize({width:390,height:1000});
+  await page.locator('#ports').evaluate(e => e.closest('details').open = true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.locator('#st-dev').screenshot({path:'/tmp/fm-static-current-ports-mobile.png'});
   // Isolated tab controller: test the install navigation lock without flashing.
   const navigation = await browser.newPage();
   await navigation.goto(process.env.FLASH_TEST_URL || 'http://127.0.0.1:8873');
@@ -293,5 +357,5 @@ try {
   assert.equal(await navigation.locator('#tab-recovery').getAttribute('aria-selected'), 'true');
   await navigation.close();
   assert.deepEqual(errors, []);
-  console.log("Browser checks passed: offline inspection, file comparison, wipe preview, errors, clearing, package changes, mobile themes. No device writes.");
+  console.log("Browser checks passed: shared firmware, layout analysis, sequential gates, MIDI refresh races and errors, recovery help, mobile themes. No device writes.");
 } finally { await browser.close(); }
