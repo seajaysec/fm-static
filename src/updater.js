@@ -11,12 +11,12 @@
 //   - what step 1 did when it stopped, so the page can say which check refused
 // fm1-base's find() only probes ports whose name looks like an FM-1's. To let it probe the ports we choose, it is given a
 // view of the MIDI ports that holds only those, under a name its own test accepts.
-import { Updater as Base, unpack7 } from "../vendor/fm1-base/fm1ota.js?v=2026-10-26.20";
+import { Updater as Base, unpack7 } from "../vendor/fm1-base/fm1ota.js?v=2026-10-26.21";
 
 export const IS_OTA = (id) => /^ota-/i.test(id.model);
 // port names probed without asking (substrings, any case); any other port only after the user picks it
 // ("FM1": M-VAVE's Open firmware names its port "FM1 Community")
-export const PRESET_PORTS = ["FM-1", "FM1", "Felucca", "OTA", "Composite", "SINCO", "USB-MIDI"];
+export const PRESET_PORTS = ["FM-1", "FM1", "Felucca", "Bubba", "OTA", "Composite", "SINCO", "USB-MIDI"];
 // M-VAVE's own Open firmware reports FM-1_80000NN (V14: FM-1_8000014), which fm1-base's test for an Open firmware ("FM1_OFFICIAL_OPEN",
 // "FM1_COMMUNITY_n") does not match, so its arming step would be skipped and the firmware's updater would refuse. M-VAVE's own
 // Workbench treats FM-1_8NNNNNN as open too; community builds in that range with more digits (FM-1_8000100) are left alone.

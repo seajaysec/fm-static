@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fm-static: FM-1 firmware flasher</title>
 <meta name="description" content="Firmware installer for the M-VAVE FM-1: installs any .fwsc file over whatever firmware the FM-1 runs, and reports what it found.">
-<link rel="stylesheet" href="style.css?v=2026-10-26.20">
+<link rel="stylesheet" href="style.css?v=2026-10-26.21">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23ff6b0f'/%3E%3Cpath d='M5 16h22M20 9l7 7-7 7' fill='none' stroke='%2315171a' stroke-width='3'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -326,7 +326,7 @@
         <p class="warn"><b>Baud Girl–sized packages:</b> a Felucca-family update loader writes only through the stock app area (0x93000). Finishing a larger image there truncates it and can leave the FM-1 dark. This page refuses that combination. Install official V15 (or use cleanup here), then that firmware with M-VAVE’s loader or its own installer.</p>
         <p>Close other apps that send MIDI to the FM-1 while you install or finish: a DAW’s clock alone can stall SysEx. Do not power-cycle twice in a row while it is in update mode — the second start with no normal boot in between drops into the chip’s ROM USB boot (WL82 UBOOT1.00).</p>
         <p>If normal firmware answers but refuses V15 after four requests, try <b>Install through a temporary updater</b> on Flash. m-bootloader alone does not determine whether an update is accepted: the running firmware’s updater matters. You do not need ROM download mode for that route.</p>
-        <p>Some firmwares (for example Bubba Machine) accept only M-VAVE’s own package: use that firmware’s path back to V15 before installing anything else here.</p>
+        <p><b>Bubba Machine:</b> its USB port name contains “Bubba”. It packs and accepts <code>.fwsc</code> the V15 way (M-VAVE’s loader and V15’s first 16 KB of flash). This page routes that port to official V15 (or cleanup, which rebuilds from V15) and refuses Felucca-family packages and the temporary Felucca updater. Identity <code>FM-1_003</code> alone is not enough — Bubba spoofs that number on purpose.</p>
         <p><b>Optimist only:</b> if the application will not start, hold <b>OCT− alone while switching on</b> for its USB rescue screen, then reconnect to a MIDI installer. This is an application rescue mode, not ROM download mode. <a href="https://github.com/w0ts/optimist#getting-back" target="_blank" rel="noopener">Optimist’s recovery instructions</a>.</p>
       </details>
       <details>
@@ -568,8 +568,8 @@
   </dialog>
 
   <footer class="small">Built on the update code of <a href="https://github.com/hugelton/Felucca">Felucca</a>'s web installer by Leo Kuroshita, Hügelton Instruments. Free software: <a href="LICENSE">MIT</a> for this page, <a href="vendor/fm1-base/LICENSE-MPL-2.0.txt">MPL-2.0</a> for the update code. <a href="https://github.com/seajaysec/fm-static">source</a>, <a href="NOTICE">notice</a>. Not affiliated with M-VAVE. Flashing is at your own risk.
-    <span class="ver">Version <b id="ver-page">2026-10-26.20</b><span id="ver-script"></span></span></footer>
+    <span class="ver">Version <b id="ver-page">2026-10-26.21</b><span id="ver-script"></span></span></footer>
 </main>
-<script type="module" src="src/app.js?v=2026-10-26.20"></script>
+<script type="module" src="src/app.js?v=2026-10-26.21"></script>
 </body>
 </html>

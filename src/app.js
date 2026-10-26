@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.20";
-import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.20";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.20";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.20";
-import { setupTabs } from "./tabs.js?v=2026-10-26.20";
-import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.20";
-import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.20";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.21";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.21";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.21";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.21";
+import { setupTabs } from "./tabs.js?v=2026-10-26.21";
+import { loadBridge, BRIDGE_PRODUCT, BRIDGE_SHA256 } from "./bridge.js?v=2026-10-26.21";
+import { factoryBanks, writeBanks } from "./banks.js?v=2026-10-26.21";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.20";
+const VERSION = "2026-10-26.21";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -86,11 +86,24 @@ function truncateRisk(pkg, dev) {
   return "";
 }
 
+// Bubba Machine names its USB product "FM-1 Bubba Machine" and packs/accepts .fwsc the V15 way: M-VAVE’s loader plus
+// V15’s first 16 KB of flash (same checks as Bubba’s own installer). Identity alone is FM-1_003 on purpose so stock
+// tools offer V15; that number is not enough to call a device Bubba. Port name /bubba/i is.
+const isBubbaPort = (name) => /bubba/i.test(name || "");
+const bubbaAccepts = (pkg) => !!pkg && pkg.loader === "official" && pkg.stockHead;
+function bubbaRisk(pkg, dev) {
+  if (!pkg || !dev || !isBubbaPort(dev.name)) return "";
+  if (bubbaAccepts(pkg)) return "";
+  return `Port “${dev.name}” is Bubba Machine. Bubba only installs packages built the way its own .fwsc is: M-VAVE’s update loader and V15’s first 16 KB of flash. ${pkg.product} does not match that shape. Load official V15 (or another package with that loader and head), install it, then continue with other firmware.`;
+}
+
 // What the header can and cannot say about who made a package. Identity numbers and sizes are all there is: no maker
 // string is in any package inspected, so a name is only ever offered as "the shape of".
 function shapeText(pkg) {
   if (pkg.kind === "stock") return "The official package: its hash is the unmodified M-VAVE V15's.";
   if (pkg.product === "FM-1_015") return "This file claims to be V15, but its SHA-256 does not match the verified official V15. It cannot be used as the V15 wipe template or as V15 in the temporary-updater route.";
+  if (pkg.loader === "official" && pkg.stockHead && pkg.product === "FM-1_003")
+    return "The shape of Bubba Machine’s own packages: M-VAVE’s loader and V15’s startup head, with identity FM-1_003 (Bubba spoofs an early stock number so M-UPGRADE offers V15). Leaving Bubba on the device needs that same loader and head; official V15 matches.";
   if (pkg.kind === "mvave") return `The shape of an M-VAVE release (${pkg.product}): M-VAVE's loader and V15's package layout. Only V15's own hash is known to this page.`;
   if (pkg.loader === "official" && pkg.flashLen > APP_END)
     return `Recognised: the shape of a Baudgirl release (M-VAVE's loader, app area up to ${hex(pkg.flashLen)} against V15's ${hex(APP_END)}; true of every one inspected, though the header carries no maker name). Only M-VAVE’s loader writes past ${hex(APP_END)}. Baud Girl’s own installer refuses Felucca-family update mode for that reason; do not Finish update into a Felucca-family loader with this file.`;
@@ -125,12 +138,21 @@ function devChecks(dev, pkg) {
   const out = [];
   const add = (st, plate, title, text) => out.push({ state: st, plate, title, text });
   if (dev) {
+    const bubba = isBubbaPort(dev.name);
     const usual = state.up.patterns.some((p) => dev.name.toLowerCase().includes(p.toLowerCase()));
     if (!usual) {
       add("detour", "BYPASSED", `Port “${dev.name}”`, "That is not a usual FM-1 name. An updater that finds the FM-1 by name could have reported it missing. This page found it by asking the port who it is.");
+    } else if (bubba) {
+      add("go", "CLEAR", `Port “${dev.name}”`, "Bubba Machine’s USB product string. Answered the FM-1 identity query.");
     } else add("go", "CLEAR", `Port “${dev.name}”`, "Answered the FM-1 identity query.");
     if (IS_OTA(dev.id)) {
       add("info", "SEEN", "FM-1 is in update mode", `${dev.id.text}: an update was cut off. Finish update continues the same write when the package fits this loader. Close other apps that send MIDI to the FM-1 while you finish. Do not power-cycle twice in a row in update mode: the second start with no normal boot in between drops into the chip’s ROM USB boot (WL82 UBOOT1.00).`);
+    } else if (bubba) {
+      add("detour", "ROUTE", `Running ${dev.id.text} (Bubba Machine)`,
+        "Bubba packs and accepts .fwsc the V15 way: M-VAVE’s update loader and V15’s first 16 KB of flash. Felucca-family packages and this page’s temporary Felucca updater are refused. Install official V15 (or another package with that loader and head), then other firmware. Identity FM-1_003 alone is Bubba’s spoof of early stock; the port name is what this page trusts.");
+      if (pkg && bubbaAccepts(pkg)) {
+        add("go", "CLEAR", "Package matches Bubba’s leave path", `${pkg.product}: M-VAVE’s loader and V15’s startup head. Safe to install from Bubba.`);
+      }
     } else {
       const fam = family(dev.id);
       if (fam === "v15") add("go", "CLEAR", "Running official V15", "The starting point installers expect. A cut during the write into another firmware often ends in the chip’s ROM USB boot rather than MIDI update mode: stock V15 stages its update loader where Felucca-family rescue stubs do not look.");
@@ -140,6 +162,9 @@ function devChecks(dev, pkg) {
       if (fam === "app" && pkg && pkg.loader === "official" && pkg.flashLen > APP_END) {
         add("info", "SEEN", "Large image over Felucca-family firmware", `This package reaches ${hex(pkg.flashLen)}. When the running firmware accepts it, it should stage this package’s M-VAVE loader, which can write the whole image. If step 1 refuses, or if you are already in Felucca-family update mode, do not force the write: install official V15 first (or use cleanup on this page), then this file.`);
       }
+      if (!IS_OTA(dev.id) && dev.id.text === "FM-1_003") {
+        add("info", "SEEN", "Identity FM-1_003", "Bubba Machine reports this number so stock tools offer V15, but so might other early builds. This port name does not contain “Bubba”. If this is Bubba Machine renamed in Audio MIDI Setup, only packages with M-VAVE’s loader and V15’s startup head will install.");
+      }
     }
     if (pkg && unverified(pkg) && !$("trust").checked)
       add("idle", "WAITING", "Source not confirmed", "Install appears once you confirm, in the box under the file's checks, that the file comes from a source you trust.");
@@ -147,6 +172,8 @@ function devChecks(dev, pkg) {
       add("barrier", "STOP", "Wrong model", `The device is ${dev.id.text}, the package is for ${pkg.product}. This is the one thing this page refuses.`);
     const trunc = pkg ? truncateRisk(pkg, dev) : "";
     if (trunc) add("barrier", "STOP", "Image larger than this update loader", trunc);
+    const bubbaBlock = pkg ? bubbaRisk(pkg, dev) : "";
+    if (bubbaBlock) add("barrier", "STOP", "Bubba Machine needs a V15-shaped package", bubbaBlock);
   }
   if (!out.length) add("idle", "WAITING", "No FM-1 selected", "Pick your FM-1 above, or press Rescan.");
   return out;
@@ -166,7 +193,7 @@ const DEVICE_TESTED_BOOT_SHA256 = "d134cb28486ba35279e622a024db74ac8afa0e017d09f
 const STANDALONE_BOOT = new Set([STOCK_V15_SHA256, BRIDGE_SHA256, DEVICE_TESTED_BOOT_SHA256]);
 const bootSupported = (pkg) => !!pkg && STANDALONE_BOOT.has(pkg.sha256);
 const bootOn = () => $("bootl").checked && !wipeOn() && !state.sequence && bootSupported(state.pkg);
-const bridgeAvailable = (pkg, dev) => !!pkg && !!dev && pkg.model === "FM-1" && pkg.loader === "official" && (pkg.product !== "FM-1_015" || pkg.sha256 === STOCK_V15_SHA256) && family(dev.id) === "app" && dev.id.text !== BRIDGE_PRODUCT;
+const bridgeAvailable = (pkg, dev) => !!pkg && !!dev && !isBubbaPort(dev.name) && pkg.model === "FM-1" && pkg.loader === "official" && (pkg.product !== "FM-1_015" || pkg.sha256 === STOCK_V15_SHA256) && family(dev.id) === "app" && dev.id.text !== BRIDGE_PRODUCT;
 const multipleFM1s = () => state.devices.filter(d => /^(ota-)?FM-1$/.test(d.id.model)).length > 1;
 // a package whose maker this page cannot vouch for: anything but the official V15 and files with Felucca's marker
 const unverified = (p) => p.kind === "other" || p.kind === "mvave";
@@ -816,9 +843,14 @@ function refresh() {
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (unverified(pkg) && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
   else if (active && truncateRisk(active, dev)) why = "This package is larger than the update loader now on the FM-1 can write. Details on the route above.";
+  // Bubba blocks a direct Install/Finish of a non–V15-shaped file, but cleanup still works: its passes are rebuilt from official V15.
+  const bubbaBlocksDirect = !why && !wipeOn() && !state.sequence && !!bubbaRisk(pkg, dev);
+  const bubbaBlocksPass = !why && !!state.sequence && !!bubbaRisk(active, dev);
+  if (bubbaBlocksDirect || bubbaBlocksPass) why = "Bubba Machine only accepts V15-shaped packages (M-VAVE’s loader and V15’s startup head). Details on the route above.";
   $("go").textContent = state.sequence ? `${resume ? "Finish" : "Retry"} ${state.sequence.kind === "bridge" ? "install" : "wipe"} pass ${state.sequence.at + 1} of ${state.sequence.passes.length}` : resume ? "Finish update" : wipeOn() ? "Start cleanup and install" : "Install";
   $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock) || (!resume && !$("backup").checked);
-  const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400 && (pkg.loader !== "app" || pkg.flashLen === APP_END);
+  const wipeWhy = bubbaBlocksDirect ? "" : why;
+  const canWipe = !!pkg && !!dev && !resume && !wipeWhy && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400 && (pkg.loader !== "app" || pkg.flashLen === APP_END);
   $("wipe-row").hidden = !canWipe;
   const canOpts = !!pkg && !!dev && !resume && !why && !state.busy && !state.done;
   $("backup-row").hidden = !canOpts;
@@ -896,6 +928,8 @@ async function install(startup = null, throughBridge = false) {
   const early = (state.sequence && state.sequence.passes[state.sequence.at]) || pkg;
   const trunc = truncateRisk(early, dev);
   if (trunc) { say(trunc, "err"); note("barrier", "STOP", "Image larger than this update loader", trunc); return; }
+  const bubba = (!doWipe && !state.sequence && bubbaRisk(pkg, dev)) || (state.sequence && bubbaRisk(early, dev));
+  if (bubba) { const msg = bubbaRisk(early, dev) || bubbaRisk(pkg, dev); say(msg, "err"); note("barrier", "STOP", "Bubba Machine needs a V15-shaped package", msg); return; }
   returnCheck++;
   state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();

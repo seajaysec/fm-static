@@ -122,10 +122,13 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   power-cycle twice in a row in update mode (that can drop into the chip’s ROM USB boot).
 - Backup & Recovery explains firmware-specific rescue controls, ROM download mode and the desktop backup/install/restart
   sequence. These instructions remain available without WebUSB; the optional USB picker only identifies devices.
-- Installs over any firmware: it does not refuse because of what the FM-1 runs now, except a wrong model and the
-  truncate cases above. It reads the package (which update loader it carries, flash.bin size, whether its startup code
-  is official V15's) and lists what it saw as checkpoints, including what an installer that only starts from V15 would
-  have stopped on. A cut during a write that left official V15 often ends in ROM USB boot rather than MIDI update mode.
+- Installs over any firmware: it does not refuse because of what the FM-1 runs now, except a wrong model, the truncate
+  cases above, and Bubba Machine. A MIDI port whose name contains “Bubba” is treated as Bubba: that firmware packs and
+  accepts `.fwsc` the V15 way (M-VAVE’s loader and V15’s startup head), so the page allows only matching packages
+  (official V15, or cleanup rebuilt from it) and hides the Felucca temporary updater. Identity `FM-1_003` alone is not
+  enough. It reads the package (which update loader it carries, flash.bin size, whether its startup code is official
+  V15's) and lists what it saw as checkpoints, including what an installer that only starts from V15 would have stopped
+  on. A cut during a write that left official V15 often ends in ROM USB boot rather than MIDI update mode.
 - If a Felucca-family firmware refuses a package, it says which check refused (app area size, loader, or startup code).
   For the startup-code refusal there is an opt-in **Restore official startup code** mode: it answers that check with the
   startup code of a Felucca-family file you pick, then M-VAVE's loader writes the package. It rewrites the region a
