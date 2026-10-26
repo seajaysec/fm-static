@@ -4,7 +4,7 @@
 // Flash table decoding and region names adapted from MIT-licensed formats.rs
 // and sectormap.rs; see NOTICE.
 // Inspection only: this module never communicates with a device or builds an update.
-import { crc16, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.14";
+import { crc16, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.15";
 
 export const FLASH_SIZE = 0x100000;
 export const BOOT_END = 0x4000;
@@ -115,7 +115,7 @@ export function writePlan(pkg, { wipe = false, boot = false, stock = null } = {}
     ranges.push({ start: BOOT_END, end: APP_END, source: "package", label: "Application area" });
   } else return { known: false, ranges, reason: "This loader's write range is unknown. The package extent alone cannot establish what it writes." };
   if (boot) ranges.push({ start: 0, end: BOOT_END, source: "unavailable", label: "Bootloader installed afterwards" });
-  return { known: true, ranges, reason: "Expected firmware writes, based on the recognised loader design. Loader markers are not signatures. Staging and update-record cleanup may write elsewhere; this is not a complete erase map or a readback guarantee." };
+  return { known: true, ranges, reason: (wipe && pkg.loader === "app" ? "Final wipe pass shown. The first pass temporarily installs V15's application at 0x4000–0x93000, preserving startup code, and must verify V15 before proceeding. " : "") + "Expected firmware writes, based on the recognised loader design. Loader markers are not signatures. Staging, update-record cleanup and running firmware may write elsewhere; this is not a complete erase map or a readback guarantee." };
 }
 
 export function regionEffect(region, plan) {

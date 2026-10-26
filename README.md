@@ -54,12 +54,29 @@ route with an extra RP2040/RP2350 board and its own serial web app. Those extern
   compares files, not the connected device; it neither creates nor restores backups and does not prove data compatibility.
   The comparison also counts complete matching/differing 4 KiB sectors and sectors that are all `0xFF` in the backup.
   Erased bytes alone do not diagnose an interrupted update.
-- Optional **application/data wipe**: writes the chosen firmware with M-VAVE's update loader over a package covering flash up to 0xBA000,
+- Optional **application/data wipe**, usually unnecessary: try a normal install first. It may be worth trying if a normal
+  flash fails. Writes the chosen firmware with M-VAVE's update loader over a package covering flash up to 0xBA000,
   so every sector in that range is erased first (saved projects and settings kept there are lost). The package is built
   from the official V15 package's loader and startup code plus the chosen firmware's app area, the way a Baudgirl
   release is V15 with another flash.bin; the builder reproduces all ten Baudgirl packages inspected byte for byte.
   This is not a complete settings or Bluetooth reset: V16's settings start at 0xBA000, and stock V15/V16 Bluetooth
-  pairings lie beyond the wipe range. The wipe operation itself is unchanged.
+  pairings lie beyond the wipe range. Only the verified V15 file is accepted as the template; choosing it in the
+  wipe dialog does not change the final target firmware. For standard application-loader packages, this takes two passes:
+  install V15's application using the selected package's application-only writer (startup code preserved), verify V15
+  answers, then install the extended wipe package. If V15 already answers, skip the first pass. Other packages use the
+  existing single-pass path and may be refused by the running firmware. Both packages are prepared before writing.
+  **The two-pass route is host tested, not device tested.** V15 booting with retained custom startup code remains
+  unverified; failure can require external recovery. Keep the page open: retry/resume retains the exact current pass
+  in memory, but reloading loses it. Cancelling remaining passes does not undo a completed V15 install.
+- Optional **m-bootloader installation** requires support in the selected firmware's updater, which runs after the
+  firmware install. An application-only update loader does not establish that support. The option appears only for
+  reviewed package hashes and is always omitted with a wipe. Unknown builds remain hidden rather than guessed compatible.
+  Official V15 is supported according to [m-bootloader's device-tested M-UPGRADE installation](https://github.com/jvitkauskas/m-bootloader#with-m-vaves-updater);
+  this page's V15 pairing has not been device tested. The reviewed community entry is [LOOM 0.9](https://github.com/charlesvestal/fm1-loom/releases/tag/v0.9), SHA-256
+  `d134cb28486ba35279e622a024db74ac8afa0e017d09f3d0c9507c25b6470a75`. Its pinned
+  [updater](https://github.com/hugelton/felucca-bsp/blob/305c372c3ec18f3917744e608998a0d7fd700135/chip/ota.c)
+  accepts packages without `flash.bin`; host simulation accepts the bundled installer. This exact pairing has not been
+  device tested. Releases requiring both `flash.bin` and `ota.bin` reject the standalone installer at the header check.
 - Can read a GitHub repository address: it lists the `.fwsc` files committed in the repo (loadable) and attached to
   releases (download-only: GitHub does not let a web page read those). For files GitHub holds a build attestation for, it
   shows which workflow built them from which commit; it reports what GitHub says and does not verify the signature.
@@ -112,11 +129,14 @@ flowchart TD
   J -- no --> J1[Stop: a package for another model is the only thing refused]
   J -- yes --> K[Back up first. Unknown-origin file: confirm a source you trust. Optional: area wipe up to 0xBA000]
   K --> M[Install: the FM-1's own firmware looks at the package first]
+  K -- application-loader extended wipe --> P[Pass 1: V15 application only, startup code kept. Verify V15 before continuing. Skip if V15 already runs]
+  P --> P2[Pass 2: official loader installs chosen firmware and wipes to 0xBA000. No m-bootloader afterwards]
+  P2 --> O
   M --> N{Does it accept it?}
   N -- yes --> O[The FM-1 writes it and restarts. The page checks it came back as the new firmware. Done]
   N -- no --> Q[Nothing was written. The page says in plain words which check said no and what to do: install V15 first, or choose another package]
   Q -- startup code --> R[Restore step: shows the risks, asks for one more file, tries again]
-  O -- if ticked --> W[Then m-bootloader: the FM-1 restarts once more. Hold PLAY at power-on for a recovery menu, REC for update mode]
+  O -- reviewed compatible release, no wipe, if ticked --> W[Then m-bootloader: one more restart. PLAY at power-on opens recovery; REC opens USB download mode for desktop tools]
   M --> S[If the write is cut off, the FM-1 stays in update mode. Reconnect and the Install button reads Finish update: it continues the same install]
   S --> O
   H --> T{Still stuck after the suggested steps?}
@@ -127,7 +147,7 @@ flowchart TD
   V -. command-line alternative .-> Z[MvaveFM1Unbricker: Windows or Linux]
   T -- Bricked FM-1 --> Y[FM-1 Transporter: extra hardware required]
   classDef notrun stroke-dasharray: 6 4
-  class H,J1,S,R notrun
+  class H,J1,S,R,P,P2 notrun
 ```
 
 The About tab uses a responsive feature table comparing M-VAVE Open Workbench, community installers, FM-Static,
@@ -160,8 +180,8 @@ round it; installing m-bootloader after a firmware and then putting M-VAVE's V16
 GitHub address; an FM-1 whose port name the page does not recognise (found with Try this port, then followed through the
 update loader); another app holding the MIDI ports during an install; M-VAVE's Open firmware (V14, installed with M-VAVE's own Workbench) and from it back to M-VAVE's V16 through this page.
 
-Not tested on a device: finishing an interrupted update, the startup-code refusal and its restore step, boot-mode
-detection, the wrong-model refusal, m-bootloader's recovery menu and update-mode keys. Out of scope:
+Those wipe runs cover the earlier single-pass route. Not tested on a device: the two-pass V15 route, finishing an interrupted update,
+the startup-code refusal and its restore step, boot-mode detection, the wrong-model refusal, m-bootloader's recovery menu and download-mode keys. Out of scope:
 how the firmware sounds, the SMK-37 (it may work; completely untested), browsers other than Chrome.
 
 The read-only inspection additions have host coverage for V15/V16 layouts, malformed tables, internal CRCs, unknown
@@ -186,6 +206,10 @@ identity and never accesses hardware. It checks backup-only use, layout differen
 clearing, package changes, all four tabs and their keyboard navigation, the install navigation lock, recovery links,
 and layouts at 320, 390, 780, 1024 and 1440 pixels. To check manually, switch through all four tabs, use a recovery link
 from About or Layout Analysis, and narrow the window: the table and workflows should reflow without sideways scrolling.
+Optional third and fourth fixture paths exercise an application-loader package and the known-incompatible
+`FM-1_3860070` package respectively. An optional fifth fixture is the reviewed LOOM 0.9 release. These check boot-option
+visibility, V15 template validation, the two-pass identity gate and phase-specific resume, replacing installation methods
+with simulations so no write command is sent.
 
 ## Lineage and licence
 

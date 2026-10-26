@@ -6,7 +6,7 @@
 // The header is a CRC-16/XMODEM stream, key 0xFFFF, which that reader names and
 // which undoes itself. Nothing in this file is taken from another implementation.
 
-import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-26.14";
+import { productOf, logicalImage } from "../vendor/fm1-base/fm1pkg.js?v=2026-10-26.15";
 
 export { productOf, logicalImage };
 
@@ -188,4 +188,17 @@ export function wipeFlash(stock, pkg) {
   bin.set(stock.image.subarray(stock.flashOff, stock.flashOff + HEAD), 0);
   bin.set(pkg.image.subarray(pkg.flashOff + HEAD, pkg.flashOff + pkg.flashLen), HEAD);
   return bin;
+}
+
+// V15's application is first installed without changing startup code. Its updater
+// then accepts the official-loader package for the extended wipe and final firmware.
+export async function wipePasses(stock, pkg) {
+  if (stock.kind !== "stock") throw new Error("The wipe requires the verified official V15 package.");
+  const final = await inspect(rebuild(stock.image, wipeFlash(stock, pkg), pkg.product));
+  if (pkg.loader !== "app") return [final];
+  if (pkg.model !== "FM-1" || pkg.flashOff !== 0x400 || pkg.flashLen !== APP_END)
+    throw new Error("The two-pass wipe requires a standard FM-1 application-loader package.");
+  const bridge = await inspect(rebuild(pkg.image, stock.image.slice(stock.flashOff, stock.flashOff + stock.flashLen), stock.product));
+  if (bridge.loader !== "app" || bridge.flashLen !== APP_END) throw new Error("The V15 application-only pass could not be prepared.");
+  return [bridge, final];
 }

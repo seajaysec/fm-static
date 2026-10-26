@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
-// With the site served locally: node tools/test-browser.mjs V15.fwsc V16.fwsc
+// With the site served locally: node tools/test-browser.mjs V15.fwsc V16.fwsc [app-loader.fwsc] [known-incompatible.fwsc] [reviewed-compatible.fwsc]
 // Needs playwright-core (or PLAYWRIGHT_MODULE pointing to its index.mjs) and Chrome.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { inspect, rebuild } from "../src/fm1pkg.js";
+import { inspect, rebuild, wipePasses } from "../src/fm1pkg.js";
 import { packageFlash, FLASH_SIZE } from "../src/flash.js";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright-core");
-const [oldPath, nextPath, appPath] = process.argv.slice(2);
+const [oldPath, nextPath, appPath, incompatibleBootPath, compatibleBootPath] = process.argv.slice(2);
 if (!oldPath || !nextPath) throw new Error("Pass V15.fwsc and V16.fwsc fixture paths.");
 const old = await inspect(readFileSync(oldPath));
 assert.equal(old.product, "FM-1_015");
@@ -299,11 +299,8 @@ try {
   if (appPath) {
     assert.equal((await inspect(readFileSync(appPath))).loader, "app");
     await page.locator("#file").setInputFiles(appPath);
-    await page.locator("#bootl").waitFor({ state: "visible" });
-    await page.locator("#bootl").check();
-    assert.match(await page.locator("#flash-ranges").textContent(), /Bootloader installed afterwards/);
-    await page.locator("#bootl").uncheck();
-    assert.doesNotMatch(await page.locator("#flash-ranges").textContent(), /Bootloader installed afterwards/);
+    await page.waitForFunction(product => document.querySelector('#f-id').textContent === product, (await inspect(readFileSync(appPath))).product);
+    assert.equal(await page.locator('#boot-row').isVisible(), false, 'unknown updater support is not offered');
   }
   await page.locator('#tab-about').click();
   await page.locator('#panel-about a[href="#st-map"]').click();
@@ -378,6 +375,87 @@ try {
   await page.locator('#ports').evaluate(e => e.closest('details').open = true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.locator('#st-dev').screenshot({path:'/tmp/fm-static-current-ports-mobile.png'});
+  if (compatibleBootPath) {
+    const supported = await inspect(readFileSync(compatibleBootPath));
+    await page.locator('#file').setInputFiles(compatibleBootPath);
+    await page.waitForFunction(product => document.querySelector('#f-id').textContent === product, supported.product);
+    await page.locator('#bootl').check();
+    assert.match(await page.locator('#flash-ranges').textContent(), /Bootloader installed afterwards/);
+    await page.locator('#wipe').check();
+    assert.equal(await page.locator('#boot-row').isVisible(), false);
+    assert.equal(await page.locator('#bootl').isChecked(), false);
+    assert.doesNotMatch(await page.locator('#flash-ranges').textContent(), /Bootloader installed afterwards/);
+  }
+  if (incompatibleBootPath) {
+    const target = await inspect(readFileSync(incompatibleBootPath)), passes = await wipePasses(old, target);
+    assert.equal(passes.length, 2);
+    assert.equal(passes[0].product, old.product);
+    assert.equal(passes[0].loader, 'app');
+    assert.equal(passes[1].loader, 'official');
+    assert.equal(passes[1].image.length, 859680);
+    await page.locator('#file').setInputFiles(incompatibleBootPath);
+    await page.waitForFunction(product => document.querySelector('#f-id').textContent === product, target.product);
+    assert.equal(await page.locator('#boot-row').isVisible(), false);
+    await page.locator('#stock-open').evaluate(e => e.click());
+    await page.locator('#stockfile').setInputFiles(nextPath);
+    await page.waitForFunction(() => document.querySelector('#sdlg-msg').textContent.includes('is not the official V15'));
+    assert.equal(await page.locator('#stock-dialog').isVisible(), true);
+    await page.locator('#stockfile').setInputFiles(oldPath);
+    await page.locator('#stock-dialog').waitFor({state:'hidden'});
+    assert.equal(await page.locator('#f-id').textContent(), target.product);
+    await page.evaluate(async () => {
+      const url = new URL('src/updater.js', location.href); url.search = new URL(document.querySelector('script[type="module"]').src).search;
+      const {Updater} = await import(url.href);
+      window.bootAttempts = 0; window.calls = []; window.mode = 'wrong-identity'; window.reportedID = 'FM-1_3860070';
+      Updater.prototype.scan = async () => [{name:'FM-1',id:{text:window.reportedID,model:window.reportedID.startsWith('ota-')?'ota-FM-1':'FM-1',version:3860070}}];
+      Updater.prototype.installBoot = async () => { window.bootAttempts++; throw Error('Unexpected boot install'); };
+      Updater.prototype.install = async (image, product, step) => {
+        window.calls.push({size:image.length,product});
+        if (window.mode === 'wrong-identity') return 'FM-1_999';
+        if (product !== 'FM-1_015') throw Object.assign(new Error('Simulated second-pass refusal'), {code:'stopped',step:1,served:4,from:{text:'FM-1_015',model:'FM-1',version:15}});
+        window.reportedID = product; step('done',product); return product;
+      };
+      Updater.prototype.resume = async (image, step, product) => {
+        window.calls.push({resume:true,size:image.length,product}); window.reportedID=product; step('done',product); return true;
+      };
+    });
+    await page.locator('#wipe').check();
+    await page.locator('#backup').check();
+    await page.locator('#go').click();
+    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('FM-1_999'));
+    assert.deepEqual(await page.evaluate(() => window.calls), [{size:passes[0].image.length,product:'FM-1_015'}], 'wrong first-pass identity must prevent the wipe');
+    assert.equal(await page.locator('#file').isDisabled(), true, 'pending phase cannot be replaced with another file');
+    assert.equal(await page.locator('#wipe-cancel').isDisabled(), true, 'stale pre-install reply cannot enable cancellation');
+    await page.evaluate(encoded => {
+      const dt=new DataTransfer();dt.items.add(new File(['<script>const firmware="'+encoded+'";</script>'],'updater.html',{type:'text/html'}));
+      document.querySelector('#st-file').dispatchEvent(new DragEvent('drop',{dataTransfer:dt,bubbles:true,cancelable:true}));
+    },readFileSync(oldPath).toString('base64'));
+    await page.locator('#rescan').click();
+    await page.locator('#device-list input').waitFor();
+    assert.equal(await page.locator('#device-list input:checked').count(),0,'pending wipe never auto-selects a device');
+    await page.locator('#device-list input').check();
+    assert.equal(await page.locator('#go').isVisible(),true,'pending HTML drop does not lock fileLoading');
+    await page.evaluate(() => {window.mode='second-refusal';window.calls=[];});
+    await page.locator('#go').click();
+    await page.waitForFunction(() => document.querySelector('#route-events').textContent.includes('Wipe pass 2 of 2 stopped'));
+    assert.deepEqual(await page.evaluate(() => window.calls), [{size:passes[0].image.length,product:'FM-1_015'},{size:859680,product:target.product}]);
+    assert.match(await page.locator('#route-events').innerText(), /Temporary V15 is running; wipe still pending/);
+    assert.match(await page.locator('#status').innerText(), /Earlier passes remain installed/);
+    assert.equal(await page.locator('#restore').isVisible(), false);
+    await page.locator('#route-events').screenshot({path:'/tmp/fm-static-two-pass-mobile.png'});
+    await page.evaluate(() => window.reportedID='ota-FM-1_015');
+    await page.locator('#rescan').click();
+    await page.locator('#device-list input').waitFor();
+    await page.locator('#device-list input').check();
+    await page.waitForFunction(() => document.querySelector('#go').textContent === 'Finish wipe pass 2 of 2' && document.querySelector('#scan-status').textContent.startsWith('Checked'));
+    assert.match(await page.locator('#flash-ranges').textContent(), /0xBA000/,'resume preview retains extended wipe bounds');
+    assert.equal(await page.locator('#wipe-cancel').isDisabled(), true, 'cannot cancel an active loader');
+    await page.locator('#go').click();
+    await page.waitForFunction(() => document.querySelector('#status').textContent.includes('extended wipe completed'));
+    assert.deepEqual((await page.evaluate(() => window.calls)).at(-1), {resume:true,size:859680,product:target.product}, 'resume uses final wipe package, not original or first pass');
+    assert.equal(await page.evaluate(() => window.bootAttempts), 0);
+    assert.equal(await page.locator('#file').isDisabled(), false);
+  }
   // Isolated tab controller: test the install navigation lock without flashing.
   const navigation = await browser.newPage();
   await navigation.goto(process.env.FLASH_TEST_URL || 'http://127.0.0.1:8873');
@@ -392,5 +470,5 @@ try {
   assert.equal(await navigation.locator('#tab-recovery').getAttribute('aria-selected'), 'true');
   await navigation.close();
   assert.deepEqual(errors, []);
-  console.log("Browser checks passed: shared firmware, layout analysis, sequential gates, MIDI refresh races and errors, recovery help, mobile themes. No device writes.");
+  console.log("Browser checks passed: shared firmware, layout analysis, sequential gates, MIDI refresh races and errors, recovery help, mobile themes" + (incompatibleBootPath ? ", boot compatibility, two-pass identity gate and exact resume" : "") + ". No device writes.");
 } finally { await browser.close(); }

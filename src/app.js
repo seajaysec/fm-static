@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 Chris Farrell
 // Page logic: pick a .fwsc, find the FM-1 (or pick its MIDI port), see what the page observed, install.
-import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.14";
-import { inspect, rebuild, wipeFlash, sha256hex, productOf, logicalImage, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.14";
-import { loadNames, saveNames } from "./ports.js?v=2026-10-26.14";
-import { setupFlashView } from "./flashview.js?v=2026-10-26.14";
-import { setupTabs } from "./tabs.js?v=2026-10-26.14";
+import { Updater, IS_OTA, PRESET_PORTS } from "./updater.js?v=2026-10-26.15";
+import { inspect, wipePasses, sha256hex, productOf, logicalImage, STOCK_V15_SHA256, APP_END, WIPE_END } from "./fm1pkg.js?v=2026-10-26.15";
+import { loadNames, saveNames } from "./ports.js?v=2026-10-26.15";
+import { setupFlashView } from "./flashview.js?v=2026-10-26.15";
+import { setupTabs } from "./tabs.js?v=2026-10-26.15";
 
 // the page version (tools/stamp.sh): shown in the footer; the page and this script must agree
-const VERSION = "2026-10-26.14";
+const VERSION = "2026-10-26.15";
 const $ = (id) => document.getElementById(id);
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const hex = (n) => "0x" + n.toString(16);
@@ -31,6 +31,7 @@ const state = {
   refusedStartup: false,       // the running firmware stopped at its startup-code check (see stepOneRefusal)
   donor: null,                 // a Felucca-family package whose startup code answers that check
   stock: null,                 // the official V15 package (inspected): its loader and startup code build a wipe package
+  wipeRun: null,               // prepared packages and current pass, retained for retry/resume in this tab
   known: new Map(),            // Felucca-family packages loaded on this page, by identity: reused as that package
 };
 
@@ -131,7 +132,10 @@ function note(st, plate, title, text) {
 }
 
 const wipeOn = () => $("wipe").checked;
-const bootOn = () => $("bootl").checked;
+// Exact release reviewed against its pinned updater source; see README compatibility evidence.
+const STANDALONE_BOOT = new Set([STOCK_V15_SHA256, "d134cb28486ba35279e622a024db74ac8afa0e017d09f3d0c9507c25b6470a75"]);
+const bootSupported = (pkg) => !!pkg && STANDALONE_BOOT.has(pkg.sha256);
+const bootOn = () => $("bootl").checked && !wipeOn() && bootSupported(state.pkg);
 // a package whose maker this page cannot vouch for: anything but the official V15 and files with Felucca's marker
 const unverified = (p) => p.kind === "other" || p.kind === "mvave";
 const items = (list) => list.map((c) => {
@@ -157,25 +161,27 @@ function renderRoute() {
 
 // after a step-1 stop on a Felucca-family firmware: the request count says which check refused (Felucca's ota.c
 // ota_stage: 2 reads of the UFW header, 1 of the loader's header, then the startup code compared 512 bytes at a time)
-function stepOneRefusal(e, pkg) {
+function stepOneRefusal(e, pkg, wipe = false) {
   // The request counts are read from Felucca's ota.c and a second Felucca-family build's (both compiled and run on the host); other
   // Felucca-family builds are assumed to share them and are not checked.
   if (e.code !== "stopped" || e.step !== 1 || !e.from || family(e.from) !== "app") return "";
-  const head = `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written.`;
+  const head = `${e.from.text} stopped after reading ${e.served} parts of the package. No firmware was installed.`;
+  if (wipe && e.served === 4 && pkg.loader === "official")
+    return `${head} This is consistent with the running firmware rejecting the wipe package’s V15 startup code because it differs from the startup code already on your FM-1. The wipe changes both the update loader and startup code, even when you are reinstalling the same firmware.`;
   if (e.served === 2 && pkg.flashLen !== APP_END)
     return `${head} In Felucca's code that is the check that the package's flash.bin is exactly V15's size (this one's is ${hex(pkg.flashLen)}). Some Felucca-family builds do not make that check. A package of V15's size gets past it, though it can still be stopped at the startup-code check.`;
   if (e.served === 3) return `${head} It does not accept this package's update loader.`;
   if (e.served === 4 && pkg.loader === "official")
-    return `${head} It looked at the package's startup code (the first 16 KB of its flash image) and would not take it. An older Felucca-family firmware refuses when that differs from the startup code on your FM-1, which is the case after a rescue that wrote another firmware's image, or with a replacement boot loader such as m-bootloader. A firmware built on a recent fm1-base accepts any startup code the chip can start from, so installing one of those first is the other way through. The restore step below answers the older kind of check.`;
+    return `${head} The request count points to a startup-code mismatch. Older firmware compares the package’s first 16 KB with the device’s existing startup code; installing m-bootloader changes those bytes. A compatible newer updater can accept valid replacement startup code. The restore workaround below requires the actual installed startup bytes: an ordinary firmware package generally does not contain a separately installed m-bootloader.`;
   return "";
 }
 
 // ---------------------------------------------------------------- firmware ---
 
 let fileEpoch = 0;
-const currentFileRequest = (ticket) => ticket === fileEpoch && !state.busy;
+const currentFileRequest = (ticket) => ticket === fileEpoch && !state.busy && !state.wipeRun;
 async function loadFile(file, source = "", ticket = ++fileEpoch) {
-  if (!file || state.busy) return;
+  if (!file || state.busy || state.wipeRun) return;
   state.fileLoading = true;
   const msg = $("file-msg"); msg.className = "small"; msg.textContent = `Reading ${file.name}…`;
   refresh();
@@ -183,13 +189,13 @@ async function loadFile(file, source = "", ticket = ++fileEpoch) {
     const pkg = await inspect(await file.arrayBuffer());
     if (ticket !== fileEpoch || state.busy) return;
     pkg.name = file.name;
-    state.pkg = pkg; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null;
+    state.pkg = pkg; state.done = false; state.refusedStartup = false; state.donor = null; state.events = []; state.frozen = null; state.wipeRun = null;
     $("after").hidden = true;
     $("wipe").checked = false; $("bootl").checked = false; $("backup").checked = false;
     $("drop-name").textContent = file.name;
     if (source) provenance(pkg, source);
     if (isFamilyFile(pkg)) state.known.set(pkg.product, pkg);
-    if (pkg.kind === "stock" || (pkg.kind === "mvave" && !state.stock)) state.stock = pkg;
+    if (pkg.kind === "stock") state.stock = pkg;
     for (const prefix of ["", "analysis-"]) {
       const field = (id) => $(prefix + id);
       field("f-name").textContent = file.name;
@@ -229,7 +235,7 @@ async function embeddedPackages(text) {
 }
 
 async function pickFile(file) {
-  if (!file || state.busy) return;
+  if (!file || state.busy || state.wipeRun) return;
   const ticket = ++fileEpoch;
   state.fileLoading = false; refresh();
   $("url-results").replaceChildren(); $("url-msg").hidden = true;
@@ -295,7 +301,7 @@ async function useUrl(u, ticket = ++fileEpoch) {
 
 $("url-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  if (state.busy) return;
+  if (state.busy || state.wipeRun) return;
   const ticket = ++fileEpoch;
   state.fileLoading = true; refresh();
   try {
@@ -481,8 +487,8 @@ const carriesFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files")
 for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => {
   if (!carriesFiles(e)) return;
   e.preventDefault();
-  e.dataTransfer.dropEffect = state.busy ? "none" : "copy";
-  if (!state.busy) drop.classList.add("over");
+  e.dataTransfer.dropEffect = state.busy || state.wipeRun ? "none" : "copy";
+  if (!state.busy && !state.wipeRun) drop.classList.add("over");
 });
 drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); });
 drop.addEventListener("drop", (e) => {
@@ -603,7 +609,7 @@ async function scan() {
       if (revision !== portRevision) { scanAgain = true; continue; }
       const ports = state.up.ports();
       state.devices = found.filter((d) => ports.includes(d.name)).map((d) => ({ ...d, manual: state.up.allowed.has(d.name) }));
-      if (!state.devices.some((d) => d.name === state.selected)) state.selected = state.devices[0]?.name ?? null;
+      if (!state.devices.some((d) => d.name === state.selected)) state.selected = state.wipeRun ? null : state.devices[0]?.name ?? null;
       for (const name of ports) if (state.up.isKnown(name) && !state.devices.some((d) => d.name === name)) state.tried.set(name, "No FM-1 reply this scan");
       $("scan-status").textContent = `Checked at ${new Date().toLocaleTimeString()}: ${ports.length} available MIDI input/output ${ports.length === 1 ? "pair" : "pairs"}; ${state.devices.length} ${state.devices.length === 1 ? "device replied" : "devices replied"}.`;
     } catch (e) {
@@ -618,7 +624,11 @@ function renderDevices() {
   list.replaceChildren();
   for (const d of state.devices) {
     const r = make("input", { type: "radio", name: "dev", checked: d.name === state.selected, ariaLabel: d.name });
-    r.addEventListener("change", () => { state.selected = d.name; state.refusedStartup = false; state.events = []; state.frozen = null; $("after").hidden = true; $("backup").checked = false; refresh(); });
+    r.addEventListener("change", () => {
+      state.selected = d.name;
+      if (!state.wipeRun) { state.refusedStartup = false; state.events = []; state.frozen = null; $("after").hidden = true; $("backup").checked = false; }
+      refresh();
+    });
     const stuck = IS_OTA(d.id);
     const parts = [r, make("span", { className: "dname", textContent: d.name }),
       make("span", { className: "meta", textContent: `${d.id.text} ${stuck ? "update mode" : "running"}` })];
@@ -727,12 +737,6 @@ $("risk").addEventListener("change", refresh);
 // The package this page writes for an area wipe: the official loader, V15's startup code, the chosen firmware's app area
 // and erased flash (0xFF) up to WIPE_END. The format is the one of Baudgirl's releases (V15 with another flash.bin), which
 // rebuild() reproduces byte for byte.
-async function wipePackage(pkg) {
-  const stock = state.stock;
-  const raw = rebuild(stock.image, wipeFlash(stock, pkg), pkg.product);
-  const built = await inspect(raw);
-  return built;
-}
 
 $("stock-open").addEventListener("click", () => { $("sdlg-main").textContent = state.pkg ? state.pkg.name : ""; $("sdlg-msg").hidden = true; $("stock-dialog").showModal(); });
 $("sdlg-close").addEventListener("click", () => $("stock-dialog").close());
@@ -741,12 +745,12 @@ $("stockfile").addEventListener("change", async () => {
   if (!f) return;
   try {
     const d = await inspect(await f.arrayBuffer());
-    if (d.kind === "stock" || d.kind === "mvave") { d.name = f.name; state.stock = d; $("stock-dialog").close(); }
+    if (d.kind === "stock") { d.name = f.name; state.stock = d; $("stock-dialog").close(); }
     else { msg.textContent = `${f.name} is not the official V15 package (its hash is not V15's).`; msg.className = "small err"; msg.hidden = false; }
   } catch (e) { msg.textContent = `${f.name}: ${e.message}`; msg.className = "small err"; msg.hidden = false; }
   refresh();
 });
-$("wipe").addEventListener("change", refresh);
+$("wipe").addEventListener("change", () => { if (!wipeOn()) state.wipeRun = null; refresh(); });
 $("bootl").addEventListener("change", refresh);
 $("backup").addEventListener("change", refresh);
 
@@ -763,14 +767,27 @@ function refresh() {
   else if (!dev) why = "Waiting for an FM-1 to be selected above.";
   else if (model !== pkg.model) why = `The device is ${dev.id.text}, the package is for ${pkg.product}.`;
   else if (unverified(pkg) && !$("trust").checked) why = "Confirm the box above to install a package of unknown origin.";
-  $("go").textContent = resume ? "Finish update" : "Install";
+  $("go").textContent = state.wipeRun ? `${resume ? "Finish" : "Retry"} wipe pass ${state.wipeRun.at + 1} of ${state.wipeRun.passes.length}` : resume ? "Finish update" : wipeOn() && pkg?.loader === "app" ? "Start two-pass wipe" : "Install";
   $("install-row").hidden = !!why || state.busy || state.done || (wipeOn() && !state.stock) || (!resume && !$("backup").checked);
-  const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400;
+  const canWipe = !!pkg && !!dev && !resume && !why && !state.busy && !state.done && pkg.flashLen <= WIPE_END && pkg.flashOff === 0x400 && (pkg.loader !== "app" || pkg.flashLen === APP_END);
   $("wipe-row").hidden = !canWipe;
   const canOpts = !!pkg && !!dev && !resume && !why && !state.busy && !state.done;
   $("backup-row").hidden = !canOpts;
-  $("boot-row").hidden = !(canOpts && pkg.loader === "app");   // M-VAVE's own firmware has no installer for it
+  $("wipe").disabled = !!state.wipeRun;
+  $("wipe-cancel-row").hidden = !state.wipeRun || state.busy;
+  $("wipe-cancel").disabled = !dev || resume || state.scanning || scanAgain;
+  $("wipe-device").hidden = !state.wipeRun || state.busy;
+  const blockedBoot = !bootSupported(pkg) || wipeOn();
+  $("boot-row").hidden = !canOpts || blockedBoot;
+  $("bootl").disabled = blockedBoot;
+  if ($("bootl").disabled) $("bootl").checked = false;
+  $("boot-compatibility").textContent = pkg?.kind === "stock"
+    ? "Official V15 supports the standalone installer; m-bootloader’s author reports testing it with M-UPGRADE. This page’s V15 pairing has not been device tested."
+    : "This exact firmware release’s updater supports the standalone installer (source checked and host tested). This pairing has not been tested on a device.";
   if (canWipe) {
+    $("wipe-method").textContent = pkg.loader === "app"
+      ? "Two passes: temporarily run V15 using an application-only install that preserves startup code; then use V15 to wipe and install your selected firmware. Pass 2 writes V15 startup code. If V15 already answers, only pass 2 is needed. Host tested, not yet device tested: V15 may fail to boot with custom startup code and require external recovery. Keep this page open; reloading loses the current pass. m-bootloader is skipped."
+      : "One pass using V15’s loader and startup code. The running firmware may refuse a startup-code change. This is not the two-pass route, which needs an application-only loader.";
     $("wipe-info").textContent = state.stock
       ? `Writes ${pkg.product} and erases the remaining space below ${hex(WIPE_END)}. Saved data in that range is lost. This is not a complete settings or Bluetooth reset: V16's settings and stock V15/V16 Bluetooth pairings are beyond it. The template's startup code is also written. Using ${state.stock.name || "the template package"}.`
       : "Needs the official V15 package: M-VAVE's loader and the startup code it writes come from it.";
@@ -779,8 +796,8 @@ function refresh() {
   $("rescan").disabled = state.busy || state.scanning || scanAgain || !state.up;
   $("rescan").textContent = state.scanning || scanAgain ? "Checking devices…" : "Refresh devices";
   $("connect-row").hidden = !!state.access;
-  $("firmware-inputs").disabled = state.busy;
-  $("file").disabled = state.busy;
+  $("firmware-inputs").disabled = state.busy || !!state.wipeRun;
+  $("file").disabled = state.busy || !!state.wipeRun;
   $("connect").disabled = !pkg || state.fileLoading || state.busy;
   $("connect-hint").textContent = state.fileLoading ? "Wait for the firmware file to finish loading." : !pkg ? "Load a firmware file first." : "Next: this page checks the FM-1 against the file.";
   $("firmware-loaded").hidden = !pkg;
@@ -801,7 +818,7 @@ function refresh() {
 
   $("st-file").dataset.state = pkg ? "done" : "now";
   $("st-dev").dataset.state = dev ? "done" : pkg ? "now" : "";
-  updateFlashView({ pkg, wipe: !resume && wipeOn(), boot: !resume && bootOn() && pkg?.loader === "app", stock: state.stock });
+  updateFlashView({ pkg, wipe: !!state.wipeRun || (!resume && wipeOn()), boot: !resume && bootOn(), stock: state.stock });
   renderRoute();
 }
 
@@ -820,6 +837,8 @@ async function install(startup = null) {
   const dev = selectedDevice(), pkg = state.pkg;
   if (!dev || !pkg || state.busy || state.scanning || scanAgain || state.fileLoading) return;
   const resume = IS_OTA(dev.id);
+  const doWipe = !!state.wipeRun || (!resume && wipeOn()), doBoot = !resume && !doWipe && bootOn();
+  if (doWipe && state.stock?.kind !== "stock") { say("Choose the verified official V15 package for the wipe template first.", "err"); return; }
   state.frozen = devChecks(dev, pkg);
   state.busy = true; state.refusedStartup = false; state.events = []; refresh();
   const up = new Updater(state.access, log);
@@ -827,44 +846,67 @@ async function install(startup = null) {
   up.select(dev.name);
   for (const d of state.devices) up.allow(d.name);
   let sent = pkg;
-  if (!resume && wipeOn() && state.stock) {
-    sent = await wipePackage(pkg);
-    log(`wipe package: ${sent.product}, flash.bin ${hex(sent.flashLen)}, ${sent.image.length} bytes`);
-  }
-  const total = Math.max(1, Math.round(sent.image.length / 512));
+  let total = 1;
   let pct = 0;
   const to = (p, text) => { pct = p; progress(p, text ?? `Writing ${Math.round(p)}%`); };
-  let reads = 0, wrote = false;
+  let reads = 0, wrote = false, phase = "", from = dev.id.text;
   const step = (k, a) => {
     log(`${k} ${a ?? ""}`);
-    if (k === "start") note("info", "STARTED", "Update started", `Asked ${a} to start an update.` + (sent !== pkg ? ` Application/data wipe: the package written covers flash up to ${hex(WIPE_END)}.` : ""));
+    if (k === "start") { from = a; note("info", "STARTED", phase || "Update started", `Asked ${a} to install ${sent.product}.`); }
     if (k === "verify") reads = a;
-    if (k === "loader") note("go", "ACCEPTED", "Step 1: accepted", `${dev.id.text} read ${reads} parts of the package, found nothing to refuse, and restarted into the update loader.`);
+    if (k === "loader") note("go", "ACCEPTED", "Step 1: accepted", `${from} read ${reads} parts of the package, found nothing to refuse, and restarted into the update loader.`);
     if (k === "write" && !wrote) { wrote = true; note("info", "WRITING", "Update loader running", "Writing the package to the FM-1. Do not unplug it."); }
     if (k === "reboot") note("go", "WRITTEN", "Written", "The package is on the FM-1. Waiting for it to restart.");
-    if (k === "done") note("go", "DONE", "Running the new firmware", `${a}.`);
+    if (k === "done") note("go", "DONE", state.wipeRun?.passes.length === 2 && state.wipeRun.at === 0 ? "Temporary V15 is running; wipe still pending" : "Running the new firmware", `${a}.`);
     if (k === "bootstart") note("info", "BOOT", "Installing m-bootloader", "The firmware is installed. It now stages m-bootloader's installer and restarts into it.");
     if (k === "bootwrite") note("info", "WRITING", "m-bootloader", "Writing the boot area. The FM-1 restarts by itself.");
-    if (k === "bootdone") note("go", "DONE", "m-bootloader installed", `The FM-1 runs ${a}. Hold PLAY while switching on for the recovery menu, REC for update mode.`);
+    if (k === "bootdone") note("go", "DONE", "m-bootloader installed", `The FM-1 runs ${a}. Hold PLAY while switching on for the recovery menu, REC for USB download mode used by desktop recovery tools.`);
     if (k === "start") { say(`Starting the update on ${a}. Do not unplug the FM-1.`); to(0, "Starting"); }
     if (k === "verify") { say("Checking the package"); to(Math.min(6, (a / 24) * 6), "Checking the package"); }
     if (k === "loader") { say("Switching to update mode"); to(6, "Update mode"); }
     if (k === "write") { say("Writing. Do not unplug the FM-1 or close this page."); to(6 + Math.min(1, a / total) * 90); }
     if (k === "reboot") { say("Restarting"); to(97, "Restarting"); }
-    if (k === "done") to(100, "Done");
+    if (k === "done") to(100, phase ? `${phase} complete` : "Done");
   };
   try {
-    if (resume) {
+    if (doWipe) {
+      if (!state.wipeRun) {
+        const passes = await wipePasses(state.stock, pkg);
+        state.wipeRun = { passes, at: passes.length === 2 && dev.id.text === "FM-1_015" ? 1 : 0 };
+      }
+      const run = state.wipeRun, first = run.at;
+      for (; run.at < run.passes.length; run.at++) {
+        sent = run.passes[run.at]; reads = 0; wrote = false; pct = 0;
+        total = Math.max(1, Math.round(sent.image.length / 512));
+        phase = `Wipe pass ${run.at + 1} of ${run.passes.length}`;
+        const bridge = run.passes.length === 2 && run.at === 0;
+        note("info", "PASS", phase, bridge
+          ? "Installing V15’s application only, preserving startup code. The extended wipe has not run yet. Waiting for V15 to answer before continuing."
+          : `Using the official loader to write ${pkg.product}, replace startup code with V15’s, and erase the remaining space below ${hex(WIPE_END)}.`);
+        log(`${phase}: ${sent.product}, flash.bin ${hex(sent.flashLen)}, ${sent.image.length} bytes`);
+        if (resume && run.at === first) {
+          if (!await up.resume(sent.image, step, sent.product)) throw Object.assign(new Error("The wipe pass did not finish."), { code: "stopped" });
+        } else {
+          const id = await up.install(sent.image, sent.product, step, { sha256: sent.sha256 });
+          if (id !== sent.product) throw Object.assign(new Error("The expected firmware did not answer."), { code: "mismatch", detail: id });
+        }
+      }
+      state.wipeRun = null;
+      say(`Done: the FM-1 runs ${pkg.product}. The extended wipe completed.`, "ok");
+    } else if (resume) {
+      total = Math.max(1, Math.round(pkg.image.length / 512));
       const done = await up.resume(pkg.image, step, pkg.product);
       if (!done) throw Object.assign(new Error(), { code: "stopped" });
       say(`Done: the FM-1 runs ${pkg.product}.`, "ok");
     } else {
+      total = Math.max(1, Math.round(sent.image.length / 512));
       const id = await up.install(sent.image, pkg.product, step, { sha256: sent.sha256, startup });
       say(`Done: the FM-1 runs ${id}.`, "ok");
-      if (bootOn() && pkg.loader === "app") {
+      if (doBoot) {
         try {
           say("Installing m-bootloader. The FM-1 restarts by itself.");
           const bid = await up.installBoot(await bootPackage(), pkg.product, step);
+          if (bid !== pkg.product) throw Object.assign(new Error("Unexpected firmware after the bootloader install."), { code: "mismatch", detail: bid });
           say(`Done: the FM-1 runs ${bid}, with m-bootloader.`, "ok");
         } catch (be) {
           log(String(be && be.stack || be));
@@ -876,15 +918,18 @@ async function install(startup = null) {
     }
   } catch (e) {
     log(String(e && e.stack || e));
-    const refusal = stepOneRefusal(e, pkg);
-    state.refusedStartup = !startup && e.served === 4 && pkg.loader === "official" && !!refusal;
+    const refusal = stepOneRefusal(e, sent, doWipe);
+    // A wipe refusal must not silently escalate into a startup-code rewrite workaround.
+    state.refusedStartup = !doWipe && !startup && e.served === 4 && sent.loader === "official" && !!refusal;
     if (e.code === "open") note("barrier", "REFUSED", "M-VAVE's Open firmware", `${e.message} Nothing was sent.`);
     if (refusal) note("barrier", "REFUSED", "Step 1: refused by the FM-1's firmware", refusal);
     else if (e.code === "stopped" && e.step === 1) note("barrier", "REFUSED", "Step 1: stopped by the FM-1's firmware", `${e.from.text} stopped after reading ${e.served} parts of the package, and nothing was written. Which check stopped it is not known for this firmware.`);
-    say(e.code === "open" ? e.message : e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${pkg.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? "Stopped: the FM-1's firmware refused the package. Nothing was written. Details on the route above." : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
+    if (doWipe && state.wipeRun) note("note", "NEXT", `${phase || "Wipe preparation"} stopped`, `The extended wipe is incomplete. ${state.wipeRun.at > 0 ? "The V15 application pass completed; it is not rolled back. " : ""}Keep this page open: retry continues this pass, or finishes it if the update loader answers. m-bootloader was not attempted.`);
+    say(e.code === "open" ? e.message : e.code === "mismatch" ? `Written, but the FM-1 reports ${e.detail}, not ${sent.product}.` : ((refusal || (e.code === "stopped" && e.step === 1)) ? `Stopped: the FM-1's firmware refused this pass. ${state.wipeRun?.at > 0 ? "Earlier passes remain installed." : "No firmware was installed."} Details on the route above.` : (MESSAGES[e.code] || `Error: ${e.message}`)), "err");
     state.frozen = null;
     progress(null);
   }
+  if (state.wipeRun) { state.devices = []; state.selected = null; renderDevices(); }
   state.busy = false;
   progress(null);
   setTimeout(scan, 1500);
@@ -892,7 +937,13 @@ async function install(startup = null) {
   refresh();
 }
 
-window.addEventListener("beforeunload", (e) => { if (state.busy) { e.preventDefault(); e.returnValue = ""; } });
+window.addEventListener("beforeunload", (e) => { if (state.busy || state.wipeRun) { e.preventDefault(); e.returnValue = ""; } });
+$("wipe-cancel").addEventListener("click", () => {
+  const dev = selectedDevice();
+  if (state.busy || state.scanning || scanAgain || !dev || IS_OTA(dev.id)) return;
+  state.wipeRun = null; $("wipe").checked = false;
+  say("Remaining wipe passes cancelled. Any firmware already installed remains on the FM-1."); refresh();
+});
 $("connect").addEventListener("click", connect);
 $("rescan").addEventListener("click", scan);
 $("go").addEventListener("click", () => install());
